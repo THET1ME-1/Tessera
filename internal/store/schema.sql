@@ -47,6 +47,37 @@ CREATE TABLE IF NOT EXISTS seen (
   PRIMARY KEY (app, day, who)
 );
 
+-- Когда человека увидели впервые. Без этой таблицы «новые против
+-- вернувшихся» и когорты считаются джойном seen с самой собой по всем людям —
+-- на двадцати пяти тысячах человек это минута на запрос.
+CREATE TABLE IF NOT EXISTS first_seen (
+  app TEXT NOT NULL,
+  who TEXT NOT NULL,
+  day TEXT NOT NULL,
+  PRIMARY KEY (app, who)
+);
+CREATE INDEX IF NOT EXISTS first_seen_day ON first_seen(app, day);
+
+-- Ритм суток и версии сборок. Считаются при пересчёте дня: по сырым событиям
+-- это два полных скана по миллионам строк, то есть четыре секунды на каждое
+-- открытие вкладки.
+CREATE TABLE IF NOT EXISTS hourly (
+  app  TEXT NOT NULL,
+  day  TEXT NOT NULL,
+  hour INTEGER NOT NULL,
+  hits INTEGER NOT NULL DEFAULT 0,
+  people INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (app, day, hour)
+);
+
+CREATE TABLE IF NOT EXISTS versions (
+  app     TEXT NOT NULL,
+  day     TEXT NOT NULL,
+  version TEXT NOT NULL,
+  people  INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (app, day, version)
+);
+
 CREATE TABLE IF NOT EXISTS layout (
   tab     TEXT PRIMARY KEY,
   blocks  TEXT NOT NULL,

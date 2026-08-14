@@ -39,6 +39,9 @@ func (a *API) Routes() *http.ServeMux {
 	mux.Handle("/api/catalog", Middleware(a.secret, http.HandlerFunc(a.catalog)))
 	mux.Handle("/api/file", Middleware(a.secret, http.HandlerFunc(a.file)))
 	mux.Handle("/api/query", Middleware(a.secret, http.HandlerFunc(a.query)))
+	// Вкладки ядра нарисованы в макете до последней подписи, поэтому получают
+	// весь набор данных разом, а не по блоку за запрос.
+	mux.Handle("/api/core", Middleware(a.secret, http.HandlerFunc(a.всеДанные)))
 	// Вход и состояние открыты без куки: иначе панели неоткуда её взять.
 	mux.HandleFunc("/api/login", a.login)
 	mux.HandleFunc("/api/logout", a.logout)
@@ -159,6 +162,9 @@ func (a *API) tabs(w http.ResponseWriter, r *http.Request) {
 		{"id": "overview", "title": "Обзор", "mod": false},
 		{"id": "screens", "title": "Экраны", "mod": false},
 		{"id": "people", "title": "Люди", "mod": false},
+		{"id": "funnels", "title": "Воронки", "mod": false},
+		{"id": "versions", "title": "Версии", "mod": false},
+		{"id": "apps", "title": "Приложения", "mod": false},
 	}
 	ms, _ := modules.Load(a.modulesDir)
 	for _, m := range ms {

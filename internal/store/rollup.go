@@ -45,7 +45,55 @@ func (s *Store) RollupDay(app, day string) error {
 		WHERE место = 1`, app, day); err != nil {
 		return fmt.Errorf("записать посетителей: %w", err)
 	}
+	if _, err := tx.Exec(`DELETE FROM hourly WHERE app=? AND day=?`, app, day); err != nil {
+		return fmt.Errorf("очистить часы: %w", err)
+	}
+	if _, err := tx.Exec(`
+		INSERT INTO hourly (app, day, hour, hits, people)
+		SELECT app, date(ts,'unixepoch'),
+		       cast(strftime('%H', ts, 'unixepoch') AS INTEGER),
+		       count(*), count(DISTINCT who)
+		FROM events WHERE app=? AND date(ts,'unixepoch')=?
+		GROUP BY 3`, app, day); err != nil {
+		return fmt.Errorf("посчитать часы: %w", err)
+	}
+
+	if _, err := tx.Exec(`DELETE FROM versions WHERE app=? AND day=?`, app, day); err != nil {
+		return fmt.Errorf("очистить версии: %w", err)
+	}
+	if _, err := tx.Exec(`
+		INSERT INTO versions (app, day, version, people)
+		SELECT app, date(ts,'unixepoch'),
+		       coalesce(nullif(version,''),'неизвестно'),
+		       count(DISTINCT coalesce(who, eid))
+		FROM events WHERE app=? AND date(ts,'unixepoch')=?
+		GROUP BY 3`, app, day); err != nil {
+		return fmt.Errorf("посчитать версии: %w", err)
+	}
+
+	// Отметка первого дня. INSERT OR IGNORE бережёт уже записанное: человек
+	// впервые появляется однажды, и пересчёт вчерашнего дня не должен двигать
+	// эту дату вперёд.
+	if _, err := tx.Exec(`
+		INSERT OR IGNORE INTO first_seen (app, who, day)
+		SELECT app, who, day FROM seen WHERE app=? AND day=?`, app, day); err != nil {
+		return fmt.Errorf("записать первый день: %w", err)
+	}
+
 	return tx.Commit()
+}
+
+// ПересчитатьПервыеДни заново собирает отметки первого появления по всей
+// таблице посетителей. Нужен один раз после обновления, дальше их ведёт
+// обычный пересчёт дня.
+func (s *Store) ПересчитатьПервыеДни() error {
+	_, err := s.db.Exec(`
+		INSERT OR REPLACE INTO first_seen (app, who, day)
+		SELECT app, who, min(day) FROM seen GROUP BY app, who`)
+	if err != nil {
+		return fmt.Errorf("пересобрать первые дни: %w", err)
+	}
+	return nil
 }
 
 // RollupRecent пересчитывает последние days суток у всех приложений. Раз в

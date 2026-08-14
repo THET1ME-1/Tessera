@@ -63,6 +63,21 @@ type StatData struct {
 	Delta *float64 `json:"delta,omitempty"`
 }
 
+// HeroData — главный блок вкладки: крупное число с пояснением и график под
+// ним. Отдельная форма нужна потому, что герой — это не плитка и не столбики,
+// а именно они вместе: число объясняет график, график объясняет число.
+type HeroData struct {
+	Value  float64  `json:"value"`
+	Title  string   `json:"title"`
+	Sub    string   `json:"sub"`
+	Format string   `json:"format,omitempty"`
+	Delta  *float64 `json:"delta,omitempty"`
+	Note   string   `json:"note,omitempty"`   // приписка мелким у графика
+	Legend []string `json:"legend,omitempty"` // подписи частей столбика
+	Items  []Item   `json:"items"`
+	Unit   string   `json:"unit"`
+}
+
 type TableData struct {
 	Cols   []string `json:"cols"`
 	Format string   `json:"format,omitempty"`

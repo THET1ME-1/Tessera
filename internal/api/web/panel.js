@@ -6,12 +6,32 @@
 
 const модули = {};   // id модуля → его имя, для подписи блоков
 
+/* Набор данных для вкладок ядра. Приходит одним запросом и живёт до смены
+   периода: экраны макета читают его так же, как читали вшитый в файл. */
+let DATA = {};
+
+/* Вкладки ядра нарисованы в макете, вкладки модулей — из заготовок. */
+const ЯДРО = {
+  overview: () => viewOverview(),
+  screens: () => viewScreens(),
+  people: () => viewPeople(),
+  funnels: () => viewFunnels(),
+  versions: () => viewVersions(),
+  apps: () => viewApps(),
+};
+
+function подписьПериода() {
+  const t = DATA.totals || {};
+  return t.first && t.last ? t.first + " – " + t.last : "";
+}
+
 const state = {
   tab: "overview",
   range: "15d",
   app: "",
   theme: "auto",
   rawNames: false,
+  людиСчитаются: true,
   вкладки: [],
   настройка: false,   // режим правки раскладки
   блоки: [],          // раскладка открытой вкладки
@@ -110,6 +130,18 @@ async function нарисоватьВкладку() {
 
   const view = $("view");
   view.innerHTML = '<p class="block-empty">Загружаю…</p>';
+
+  // Вкладки ядра нарисованы в макете и получают весь набор данных разом.
+  if (ЯДРО[state.tab]) {
+    try {
+      await загрузитьЯдро();
+      ЯДРО[state.tab]();
+      подписатьШапку();
+    } catch (e) {
+      view.innerHTML = '<p class="block-empty">Вкладка не открылась: ' + e.message + "</p>";
+    }
+    return;
+  }
 
   let раскладка;
   try {
@@ -261,17 +293,70 @@ document.addEventListener("click", async e => {
   }
 });
 
+/* Блоки модуля превращаются в плоские числа: {month:{value:305}} → {month:305}.
+   Что не число — остаётся как есть. */
+function развернуть(набор) {
+  const out = {};
+  for (const [ключ, знач] of Object.entries(набор || {})) {
+    out[ключ] = (знач && typeof знач === "object" && "value" in знач && !("items" in знач))
+      ? знач.value : знач;
+  }
+  return out;
+}
+
+let ядроКогда = 0;
+async function загрузитьЯдро() {
+  const свежо = Date.now() - ядроКогда < 20000 && DATA.totals;
+  if (свежо) return;
+  DATA = await взять(адрес("/api/core") + "?range=" + encodeURIComponent(state.range) +
+    (state.app ? "&app=" + encodeURIComponent(state.app) : ""));
+  // Макет ждёт от модулей плоские числа (DATA.income.month), а модуль
+  // присылает блоки ({value, sub}). Разворачиваем: панель не должна знать,
+  // что внутри блока, но обзор рисовался до модулей и правок не требует.
+  const м = DATA.modules || {};
+  DATA.income = развернуть(м.income);
+  DATA.moderation = развернуть(м.moderation);
+  DATA.appdb = развернуть(м.appdb);
+  if (!state.app && (DATA.apps || []).length) {
+    state.app = DATA.apps[0].id;
+    заполнитьВыборПриложений();
+  }
+  ядроКогда = Date.now();
+}
+
+function заполнитьВыборПриложений() {
+  const sel = $("appselect");
+  if (!sel || !(DATA.apps || []).length) return;
+  sel.innerHTML = DATA.apps.map(a =>
+    '<option value="' + a.id + '"' + (a.id === state.app ? " selected" : "") +
+    (a.live ? "" : " disabled") + ">" + a.name + (a.live ? "" : " · нет событий") +
+    "</option>").join("");
+  sel.onchange = async () => {
+    state.app = sel.value;
+    ядроКогда = 0;
+    await загрузитьИмена();
+    нарисоватьВкладку();
+  };
+}
+
 async function загрузитьМодули() {
   const список = await взять(адрес("/api/modules")).catch(() => []);
   список.forEach(m => { модули[m.id] = m.name; });
 }
 
 /* Строка контекста: сколько событий в базе и за какой срок они живут. */
-async function подписатьШапку() {
-  try {
-    const d = await взять(адрес("/api/block?src=core:events_total&range=") + state.range);
-    $("ctx-events").textContent = fmt(d.value);
-  } catch { $("ctx-events").textContent = "—"; }
+/* Строка контекста: за какой срок собрано, сколько людей и событий, какой SDK
+   прислал последнее событие. */
+function подписатьШапку() {
+  const t = DATA.totals || {};
+  const поставить = (id, знач) => { const n = $(id); if (n) n.textContent = знач; };
+
+  поставить("ctx-people", t.people === undefined ? "—" : fmt(t.people));
+  поставить("ctx-events", t.events === undefined ? "—" : fmt(t.events));
+  if (t.first) поставить("ctx-range", подписьПериода());
+
+  const своё = (DATA.apps || []).find(a => a.id === state.app) || (DATA.apps || [])[0];
+  поставить("ctx-sdk", (своё && своё.sdk) || "—");
 }
 
 /* ── словарь имён ───────────────────────────────────────────────────────── */
@@ -321,6 +406,7 @@ document.addEventListener("click", e => {
 document.querySelectorAll("[data-range]").forEach(b =>
   b.addEventListener("click", () => {
     state.range = b.dataset.range;
+    ядроКогда = 0;
     document.querySelectorAll("[data-range]").forEach(x => x.removeAttribute("aria-pressed"));
     b.setAttribute("aria-pressed", "true");
     подписатьПериод();
@@ -369,9 +455,9 @@ async function запустить() {
   if (state.вкладки.some(t => t.id === изАдреса)) state.tab = изАдреса;
 
   await загрузитьМодули();
+  await загрузитьЯдро();       // отсюда узнаём приложение
   await загрузитьИмена();
   await нарисоватьВкладку();
-  подписатьШапку();
 }
 
 addEventListener("hashchange", () => {
