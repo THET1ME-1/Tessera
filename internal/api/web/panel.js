@@ -152,7 +152,7 @@ async function нарисоватьВкладку() {
       "&range=" + encodeURIComponent(state.range) +
       (state.app ? "&app=" + encodeURIComponent(state.app) : "");
     взять(адрес)
-      .then(d => нарисовать(host, b.type, d))
+      .then(d => нарисовать(host, b.type, d, b))
       .catch(e => {
         host.innerHTML = '<p class="block-empty">' +
           (e.message.includes("не отвечал") ? "Модуль ещё не присылал данные."

@@ -85,6 +85,18 @@ function блокColumns(host, d) {
   }
 }
 
+/* Шаг растра: круглое число, при котором у лидера выходит десяток-другой
+   кусочков. Считать их глазами приятно до сорока, дальше это уже полоса. */
+function подобратьШаг(наибольшее) {
+  if (!наибольшее) return 1;
+  const порядок = Math.pow(10, Math.floor(Math.log10(наибольшее / 20)));
+  for (const множитель of [1, 2, 5, 10]) {
+    const шаг = порядок * множитель;
+    if (шаг > 0 && наибольшее / шаг <= 40) return шаг;
+  }
+  return порядок * 10;
+}
+
 function подписьДня(l) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(l)) return l;
   const [, m, d] = l.split("-");
@@ -95,8 +107,13 @@ function подписьДня(l) {
 function блокRaster(host, d) {
   const rows = (d.rows || []).slice().sort((a, b) => b.value - a.value);
   if (!rows.length) return пусто(host, "нечего показывать");
-  const unit = d.unit || 1;
-  const maxN = Math.max(1, Math.ceil(Math.max(...rows.map(r => r.value)) / unit));
+  const наибольшее = Math.max(...rows.map(r => r.value));
+  // Шаг, присланный модулем, может не подойти данным: тысяча файлов на
+  // кусочек при значениях в десятки даёт один кусочек, растянутый во всю
+  // ширину. В таком случае шаг подбирается сам — по 1, 2 или 5 на порядок.
+  let unit = d.unit || 1;
+  if (наибольшее / unit < 5 || наибольшее / unit > 400) unit = подобратьШаг(наибольшее);
+  const maxN = Math.max(1, Math.ceil(наибольшее / unit));
   host.innerHTML = rows.map(r => {
     const n = Math.max(1, Math.round(r.value / unit));
     const cells = Array.from({ length: n }, (_, i) =>
@@ -106,7 +123,8 @@ function блокRaster(host, d) {
       '<svg viewBox="0 0 ' + (maxN * 8) + ' 6" preserveAspectRatio="xMinYMid meet">' + cells + "</svg>" +
       '<span class="rv">' + число(r.value, d.format) + "</span></div>";
   }).join("") +
-    (d.unitLabel ? '<p class="block-note">Один кусочек — ' + fmt(unit) + " " + d.unitLabel + "</p>" : "");
+    '<p class="block-note">Один кусочек — ' + fmt(unit) + " " +
+      (d.unitLabel || "единиц").replace(/ на кусочек$/, "") + "</p>";
 }
 
 /* ── table: таблица с полосой ───────────────────────────────────────────── */
@@ -196,6 +214,98 @@ function блокMap(host, d) {
     "<span>вверх — " + (d.yLabel || "больше") + "</span></div>");
 }
 
+/* ── shelf: лента чужих кадров ───────────────────────────────────────────
+ *
+ * Единственная заготовка, которая ходит на сервер сама: собрать двести тысяч
+ * файлов заранее нельзя, страницы приходят по требованию. Источник блока
+ * подставляется в /api/query, оттуда же берутся фильтры и число страниц. */
+function блокShelf(host, d, блок) {
+  const src = (блок && блок.src) || "";
+  const вид = host.dataset.kind || "";
+  const стр = Number(host.dataset.page || 0);
+
+  const items = d.items || [];
+  const виды = d.kinds || [];
+
+  const фильтры = '<div class="seg shelf-filter" role="group" aria-label="Вид файла">' +
+    '<button data-kind=""' + (вид ? "" : ' aria-pressed="true"') + ">Все</button>" +
+    виды.map(k => '<button data-kind="' + k + '"' +
+      (k === вид ? ' aria-pressed="true"' : "") + ">" + k + "</button>").join("") + "</div>";
+
+  const кадры = items.map((it, i) =>
+    '<figure data-i="' + i + '"><div class="ph' + (it.video ? " vid" : "") + '">' +
+      '<img loading="lazy" src="' + it.url + '" alt="' + (it.caption || "кадр") + '"' +
+      ' onerror="this.closest(&quot;.ph&quot;).classList.add(&quot;нет&quot;)">' +
+    "</div><figcaption>" + (it.caption || "") + "</figcaption></figure>").join("");
+
+  const листалка = '<div class="shelf-nav">' +
+    '<button class="ghost-btn" data-page="' + (стр - 1) + '"' + (стр <= 0 ? " disabled" : "") +
+      ">Назад</button>" +
+    '<span class="lbl">страница ' + (стр + 1) + " из " + fmt(d.pages || 1) +
+      " · всего " + fmt(d.total || 0) + " файлов</span>" +
+    '<button class="ghost-btn" data-page="' + (стр + 1) + '"' +
+      ((d.pages && стр + 1 >= d.pages) ? " disabled" : "") + ">Дальше</button></div>";
+
+  host.innerHTML = фильтры +
+    (items.length ? '<div class="shelf">' + кадры + "</div>" : '<p class="block-empty">пусто</p>') +
+    листалка +
+    '<p class="block-note">Порядок — по загрузке в хранилище, а не по дате внутри записи: ' +
+    "дату загрузивший может подвинуть. Кадры чужие, поэтому наружу они не уходят.</p>";
+
+  const перерисовать = async () => {
+    host.innerHTML = '<p class="block-empty">Загружаю ленту…</p>';
+    const адрес = "/api/query?src=" + encodeURIComponent(src) +
+      "&page=" + host.dataset.page + (host.dataset.kind ? "&kind=" + encodeURIComponent(host.dataset.kind) : "");
+    try {
+      блокShelf(host, await взять(адрес), блок);
+    } catch (e) {
+      пусто(host, "лента не пришла: " + e.message);
+    }
+  };
+
+  host.querySelectorAll("[data-kind]").forEach(b => b.addEventListener("click", () => {
+    host.dataset.kind = b.dataset.kind;
+    host.dataset.page = "0";
+    перерисовать();
+  }));
+  host.querySelectorAll("[data-page]").forEach(b => b.addEventListener("click", () => {
+    if (b.disabled) return;
+    host.dataset.page = b.dataset.page;
+    перерисовать();
+  }));
+
+  // Лайтбокс: кадр крупно, стрелки листают, Esc закрывает.
+  host.querySelectorAll(".shelf figure").forEach(f => f.addEventListener("click", () => {
+    открытьКадр(items, Number(f.dataset.i));
+  }));
+}
+
+function открытьКадр(items, i) {
+  const слой = document.createElement("div");
+  слой.className = "light";
+  const показать = n => {
+    const it = items[(n + items.length) % items.length];
+    слой.innerHTML = '<img src="' + it.url.replace("&w=512", "") + '&w=1600" alt="">' +
+      '<div class="light-bar"><span class="lbl">' + (it.caption || "") + " · " +
+      (it.group || "") + "</span></div>";
+    слой.dataset.i = String((n + items.length) % items.length);
+  };
+  показать(i);
+  document.body.appendChild(слой);
+
+  const клавиша = e => {
+    if (e.key === "Escape") закрыть();
+    if (e.key === "ArrowRight") показать(Number(слой.dataset.i) + 1);
+    if (e.key === "ArrowLeft") показать(Number(слой.dataset.i) - 1);
+  };
+  const закрыть = () => {
+    слой.remove();
+    removeEventListener("keydown", клавиша);
+  };
+  addEventListener("keydown", клавиша);
+  слой.addEventListener("click", закрыть);
+}
+
 function пусто(host, текст) {
   host.innerHTML = '<p class="block-empty">' + текст + "</p>";
 }
@@ -205,16 +315,17 @@ function пусто(host, текст) {
 const ЗАГОТОВКИ = {
   stat: блокStat, columns: блокColumns, raster: блокRaster, table: блокTable,
   list: блокList, funnel: блокFunnel, heat: блокHeat, note: блокNote, map: блокMap,
+  shelf: блокShelf,
 };
 
-function нарисовать(host, тип, данные) {
+function нарисовать(host, тип, данные, блок) {
   // Заготовки, рисующие в svg, дописывают узлы к тому, что уже лежит внутри,
   // поэтому заглушку «загружаю» надо снять руками.
   host.innerHTML = "";
   const рисовать = ЗАГОТОВКИ[тип];
   if (!рисовать) return пусто(host, "панель не умеет блок «" + тип + "»: обновите её");
   try {
-    рисовать(host, данные);
+    рисовать(host, данные, блок);
   } catch (e) {
     пусто(host, "данные не разобрались: " + e.message);
   }

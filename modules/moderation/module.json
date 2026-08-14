@@ -1,0 +1,55 @@
+{
+  "id": "moderation",
+  "name": "Модерация",
+  "version": "1.0.0",
+  "run": [
+    "python3",
+    "main.py"
+  ],
+  "every": "30m",
+  "root": "/opt/pocketbase/pb_data/thumb_cache",
+  "tabs": [
+    {
+      "id": "moderation",
+      "title": "Модерация",
+      "blocks": [
+        {
+          "type": "stat",
+          "title": "Файлов в хранилище",
+          "span": 4,
+          "src": "moderation:total"
+        },
+        {
+          "type": "stat",
+          "title": "Воспоминаний",
+          "span": 4,
+          "src": "moderation:fresh"
+        },
+        {
+          "type": "raster",
+          "title": "Что лежит",
+          "span": 4,
+          "src": "moderation:kinds"
+        },
+        {
+          "type": "shelf",
+          "title": "Лента",
+          "span": 12,
+          "src": "moderation:shelf"
+        }
+      ]
+    }
+  ],
+  "tiles": [
+    {
+      "type": "stat",
+      "title": "Файлов на модерации",
+      "src": "moderation:total"
+    }
+  ],
+  "source": {
+    "_комментарий": "База приложения открывается только на чтение. Миниатюры делает крон приложения, модуль лишь называет готовый файл — путь обязан лежать внутри root.",
+    "db": "/opt/pocketbase/pb_data/data.db",
+    "thumb": "/opt/pocketbase/pb_data/thumb_cache/{id}_{w}.webp"
+  }
+}

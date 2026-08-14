@@ -346,3 +346,29 @@ tr:hover .nm-edit button,.rrow:hover .nm-edit button,.nm-edit button:focus-visib
   border-radius:var(--r);font-size:13px;text-align:left;color:var(--ink)}
 .cat-row:hover{background:var(--panel-2)}
 @media (min-width:700px){ .sheet{align-items:center} }
+
+/* ── лента модерации ── */
+.shelf-filter{margin-bottom:14px;width:max-content;max-width:100%;overflow-x:auto}
+.shelf{display:grid;grid-template-columns:repeat(10,1fr);gap:6px}
+.shelf figure{margin:0;display:flex;flex-direction:column;gap:5px;min-width:0;cursor:zoom-in}
+.shelf .ph{aspect-ratio:1;border-radius:var(--r);background:var(--panel-2);overflow:hidden;position:relative}
+.shelf .ph img{width:100%;height:100%;object-fit:cover;display:block}
+.shelf .ph.нет img{display:none}
+.shelf .ph.нет::after{content:"кадр ещё готовится";position:absolute;inset:0;display:flex;
+  align-items:center;justify-content:center;font-family:var(--mono);font-size:8.5px;
+  color:var(--ink-3);text-align:center;padding:4px}
+.shelf .vid::after{content:"видео";position:absolute;left:6px;bottom:5px;font-family:var(--mono);
+  font-size:8.5px;letter-spacing:.08em;color:var(--panel);background:rgba(0,0,0,.45);
+  padding:1px 5px;border-radius:3px}
+.shelf figcaption{font-family:var(--mono);font-size:9.5px;letter-spacing:.05em;color:var(--ink-3);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.shelf-nav{display:flex;align-items:center;gap:12px;margin-top:14px}
+.shelf-nav .lbl{margin:0 auto}
+.shelf-nav button[disabled]{opacity:.4;cursor:default}
+.light{position:fixed;inset:0;background:rgba(0,0,0,.86);z-index:90;display:flex;
+  align-items:center;justify-content:center;cursor:zoom-out;padding:24px}
+.light img{max-width:100%;max-height:88vh;object-fit:contain;border-radius:var(--r)}
+.light-bar{position:absolute;left:0;right:0;bottom:0;padding:14px 20px;text-align:center}
+.light-bar .lbl{color:#c9c9c2}
+@media (max-width:1080px){ .shelf{grid-template-columns:repeat(6,1fr)} }
+@media (max-width:680px){ .shelf{grid-template-columns:repeat(3,1fr)} }

@@ -24,13 +24,17 @@ type Tab struct {
 
 // Manifest — всё, что модуль сообщает о себе.
 type Manifest struct {
-	ID      string         `json:"id"`
-	Name    string         `json:"name"`
-	Version string         `json:"version"`
-	Run     []string       `json:"run"`   // как запускать: ["python3", "main.py"]
-	Every   string         `json:"every"` // как часто собирать: "20m"
-	Tabs    []Tab          `json:"tabs"`
-	Tiles   []blocks.Block `json:"tiles"` // что предлагает положить на обзор
+	ID      string   `json:"id"`
+	Name    string   `json:"name"`
+	Version string   `json:"version"`
+	Run     []string `json:"run"`   // как запускать: ["python3", "main.py"]
+	Every   string   `json:"every"` // как часто собирать: "20m"
+	// Root — папка, из которой модулю разрешено отдавать файлы. Без неё роут
+	// файлов молчит: путь, присланный модулем, обязан лежать внутри чего-то
+	// заранее объявленного.
+	Root  string         `json:"root"`
+	Tabs  []Tab          `json:"tabs"`
+	Tiles []blocks.Block `json:"tiles"` // что предлагает положить на обзор
 }
 
 // Load читает все папки внутри dir.

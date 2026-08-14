@@ -8,6 +8,7 @@ package api
 import (
 	"encoding/json"
 	"net/http"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -36,6 +37,8 @@ func (a *API) Routes() *http.ServeMux {
 	mux.Handle("/api/labels", Middleware(a.secret, http.HandlerFunc(a.labels)))
 	mux.Handle("/api/modules", Middleware(a.secret, http.HandlerFunc(a.modulesList)))
 	mux.Handle("/api/catalog", Middleware(a.secret, http.HandlerFunc(a.catalog)))
+	mux.Handle("/api/file", Middleware(a.secret, http.HandlerFunc(a.file)))
+	mux.Handle("/api/query", Middleware(a.secret, http.HandlerFunc(a.query)))
 	// Вход и состояние открыты без куки: иначе панели неоткуда её взять.
 	mux.HandleFunc("/api/login", a.login)
 	mux.HandleFunc("/api/logout", a.logout)
@@ -230,6 +233,38 @@ func (a *API) modulesList(w http.ResponseWriter, r *http.Request) {
 		out = append(out, запись)
 	}
 	отдать(w, out)
+}
+
+// query спрашивает у модуля один блок по требованию, с параметрами. Так
+// работают ленты с перелистыванием: собирать двести тысяч кадров заранее
+// незачем, да и некуда.
+func (a *API) query(w http.ResponseWriter, r *http.Request) {
+	владелец, ключ, ok := strings.Cut(r.URL.Query().Get("src"), ":")
+	if !ok || владелец == "core" {
+		http.Error(w, "адрес вида модуль:ключ", http.StatusBadRequest)
+		return
+	}
+	ms, _ := modules.Load(a.modulesDir)
+	for _, m := range ms {
+		if m.ID != владелец {
+			continue
+		}
+		параметры := map[string]string{}
+		for k, v := range r.URL.Query() {
+			if k != "src" && len(v) > 0 {
+				параметры[k] = v[0]
+			}
+		}
+		raw, err := modules.Query(m, filepath.Join(a.modulesDir, m.ID), ключ, параметры)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadGateway)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(raw)
+		return
+	}
+	http.Error(w, "нет такого модуля", http.StatusNotFound)
 }
 
 // catalog — что можно положить на вкладку: блоки ядра плюс то, что предлагают
