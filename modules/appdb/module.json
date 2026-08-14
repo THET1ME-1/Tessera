@@ -1,0 +1,209 @@
+{
+  "id": "appdb",
+  "name": "База приложения",
+  "version": "1.0.0",
+  "run": [
+    "python3",
+    "main.py"
+  ],
+  "every": "20m",
+  "tabs": [
+    {
+      "id": "product",
+      "title": "Продукт",
+      "blocks": [
+        {
+          "type": "stat",
+          "title": "Всего людей",
+          "span": 3,
+          "src": "appdb:users_total"
+        },
+        {
+          "type": "stat",
+          "title": "Живых пар",
+          "span": 3,
+          "src": "appdb:pairs_alive"
+        },
+        {
+          "type": "stat",
+          "title": "Соло-профилей",
+          "span": 3,
+          "src": "appdb:solo"
+        },
+        {
+          "type": "stat",
+          "title": "Новых за сутки",
+          "span": 3,
+          "src": "appdb:new_day"
+        },
+        {
+          "type": "funnel",
+          "title": "Путь до пары",
+          "span": 6,
+          "src": "appdb:funnel"
+        },
+        {
+          "type": "list",
+          "title": "Что накопилось",
+          "span": 6,
+          "src": "appdb:content"
+        },
+        {
+          "type": "columns",
+          "title": "Регистрации по дням",
+          "span": 12,
+          "src": "appdb:regs_daily"
+        },
+        {
+          "type": "raster",
+          "title": "Чем пользуются пары",
+          "span": 7,
+          "src": "appdb:features"
+        },
+        {
+          "type": "stat",
+          "title": "Монеты в кошельках",
+          "span": 5,
+          "src": "appdb:coins"
+        },
+        {
+          "type": "stat",
+          "title": "Куплен Плюс",
+          "span": 5,
+          "src": "appdb:plus"
+        },
+        {
+          "type": "heat",
+          "title": "Удержание по неделям",
+          "span": 7,
+          "src": "appdb:cohorts"
+        },
+        {
+          "type": "stat",
+          "title": "Сколько живёт пара",
+          "span": 5,
+          "src": "appdb:pairs_life"
+        }
+      ]
+    }
+  ],
+  "tiles": [
+    {
+      "type": "stat",
+      "title": "Всего людей",
+      "src": "appdb:users_total"
+    },
+    {
+      "type": "stat",
+      "title": "Живых пар",
+      "src": "appdb:pairs_alive"
+    },
+    {
+      "type": "stat",
+      "title": "Соло-профилей",
+      "src": "appdb:solo"
+    },
+    {
+      "type": "stat",
+      "title": "Новых за сутки",
+      "src": "appdb:new_day"
+    }
+  ],
+  "sql": {
+    "_комментарий": "Ядро эту секцию не читает: для него это лишнее поле манифеста. Запросы правятся под своё приложение, путь к базе тоже.",
+    "db": "/opt/pocketbase/pb_data/data.db",
+    "blocks": {
+      "users_total": {
+        "type": "stat",
+        "sub": "зарегистрировано в приложении",
+        "query": "SELECT count(*) FROM users",
+        "parts": "SELECT CASE WHEN platform IS NULL OR platform='' THEN 'неизвестно' ELSE platform END, count(*) FROM users GROUP BY 1 ORDER BY 2 DESC"
+      },
+      "pairs_alive": {
+        "type": "stat",
+        "sub": "групп, где сошлись двое",
+        "query": "SELECT count(*) FROM groups WHERE disbanded=0 AND json_valid(members) AND json_array_length(members)>=2"
+      },
+      "solo": {
+        "type": "stat",
+        "sub": "ждут второго",
+        "query": "SELECT count(*) FROM groups WHERE disbanded=0 AND json_valid(members) AND json_array_length(members)=1"
+      },
+      "new_day": {
+        "type": "stat",
+        "sub": "новых аккаунтов за сутки",
+        "query": "SELECT count(*) FROM users WHERE created > datetime('now','-1 day')",
+        "delta": "SELECT count(*) FROM users WHERE created > datetime('now','-2 day') AND created <= datetime('now','-1 day')",
+        "parts": "SELECT CASE WHEN platform IS NULL OR platform='' THEN 'неизвестно' ELSE platform END, count(*) FROM users WHERE created > datetime('now','-1 day') GROUP BY 1 ORDER BY 2 DESC"
+      },
+      "funnel": {
+        "type": "funnel",
+        "steps": [
+          {
+            "name": "Зарегистрировались",
+            "query": "SELECT count(*) FROM users"
+          },
+          {
+            "name": "Поставили аватар",
+            "query": "SELECT count(*) FROM users WHERE avatar_url IS NOT NULL AND avatar_url!=''"
+          },
+          {
+            "name": "Завели группу",
+            "query": "SELECT count(*) FROM users WHERE group_ids IS NOT NULL AND group_ids NOT IN ('','[]')"
+          },
+          {
+            "name": "Написали воспоминание",
+            "query": "SELECT count(DISTINCT author_uid) FROM memories WHERE deleted=0"
+          },
+          {
+            "name": "Купили Плюс",
+            "query": "SELECT count(*) FROM users WHERE plus=1",
+            "note": "шаг для сравнения, а не отвал"
+          }
+        ]
+      },
+      "content": {
+        "type": "list",
+        "query": "SELECT 'Воспоминания', count(*) FROM memories WHERE deleted=0 UNION ALL SELECT 'Сообщения', count(*) FROM chat_messages UNION ALL SELECT 'Файлы', count(*) FROM media UNION ALL SELECT 'Отметки настроения', count(*) FROM mood_entries"
+      },
+      "regs_daily": {
+        "type": "columns",
+        "unit": "регистраций",
+        "query": "SELECT substr(created,1,10) AS д, count(*) FROM users WHERE created > datetime('now','-30 day') GROUP BY д ORDER BY д"
+      },
+      "features": {
+        "type": "raster",
+        "unit": 1000,
+        "unitLabel": "пар на кусочек",
+        "query": "SELECT 'Виджеты', count(DISTINCT group_id) FROM widget_data UNION ALL SELECT 'Настроения', count(DISTINCT group_id) FROM mood_entries UNION ALL SELECT 'Воспоминания', count(DISTINCT group_id) FROM memories WHERE deleted=0 UNION ALL SELECT 'Чат', count(DISTINCT group_id) FROM chat_messages"
+      },
+      "coins": {
+        "type": "stat",
+        "sub": "на руках у людей",
+        "query": "SELECT coalesce(sum(coins),0) FROM users",
+        "parts": "SELECT 'с монетами', count(*) FROM users WHERE coins>0"
+      },
+      "plus": {
+        "type": "stat",
+        "sub": "аккаунтов с полным доступом",
+        "query": "SELECT count(*) FROM users WHERE plus=1",
+        "parts": "SELECT CASE WHEN plus_platform IS NULL OR plus_platform='' THEN 'неизвестно' ELSE plus_platform END, count(*) FROM users WHERE plus=1 GROUP BY 1 ORDER BY 2 DESC"
+      },
+      "cohorts": {
+        "type": "heat",
+        "cols": [
+          "Пришло",
+          "Живы через 7 дней",
+          "Живы через 30"
+        ],
+        "query": "SELECT strftime('%Y, неделя %W', created) AS неделя, count(*), sum(CASE WHEN updated > datetime(created,'+7 day') THEN 1 ELSE 0 END), sum(CASE WHEN updated > datetime(created,'+30 day') THEN 1 ELSE 0 END) FROM users WHERE created > datetime('now','-60 day') GROUP BY неделя ORDER BY неделя"
+      },
+      "pairs_life": {
+        "type": "stat",
+        "sub": "дней в среднем до расставания",
+        "query": "SELECT cast(avg(julianday(disbanded_at)-julianday(created_at)) AS int) FROM groups WHERE disbanded=1 AND disbanded_at IS NOT NULL AND disbanded_at!=''",
+        "parts": "SELECT 'распались всего', count(*) FROM groups WHERE disbanded=1"
+      }
+    }
+  }
+}
