@@ -18,17 +18,28 @@ function nameCell(k, editable) {
     "</span>" + (named(k) ? "<small>" + k + "</small>" : "") + "</span>";
 }
 
-const money = v => fmt(v);
+/* Число по формату блока. Деньги показываем с копейками, пока сумма мала:
+   у дохода в 0,69 доллара округление до целого превращает его в ноль. */
+function число(v, формат) {
+  if (v === null || v === undefined) return "—";
+  if (формат === "money") {
+    const abs = Math.abs(v);
+    const s = abs >= 1000 ? fmt(v) : v.toFixed(2).replace(".", ",");
+    return s + NBSP + "$";
+  }
+  if (формат === "hours") return fmt(v) + NBSP + "ч";
+  return fmt(v);
+}
 
 /* ── stat: крупное число, разбивка, прирост ─────────────────────────────── */
 function блокStat(host, d) {
   const части = (d.parts || []).map(p =>
-    '<span class="stat-part"><i></i>' + p.name + " " + fmt(p.value) + "</span>").join("");
+    '<span class="stat-part"><i></i>' + p.name + " " + число(p.value, d.format) + "</span>").join("");
   const дельта = d.delta === undefined || d.delta === null ? "" :
     '<span class="delta' + (d.delta < 0 ? " down" : "") + '">' +
     (d.delta >= 0 ? "↑ " : "↓ ") + Math.abs(d.delta).toFixed(0) + "%</span>";
   host.innerHTML =
-    '<div class="stat-val num">' + fmt(d.value) + "</div>" +
+    '<div class="stat-val num">' + число(d.value, d.format) + "</div>" +
     (дельта ? '<div style="margin:8px 0 0">' + дельта + "</div>" : "") +
     (d.sub ? '<div class="stat-sub">' + d.sub + "</div>" : "") +
     (части ? '<div class="stat-parts">' + части + "</div>" : "");
@@ -60,7 +71,11 @@ function блокColumns(host, d) {
   const медиана = суммы[Math.floor(суммы.length / 2)] || 0;
   const максимум = суммы[суммы.length - 1] || 0;
   const порог = медиана * 5;
-  const режем = медиана > 0 && максимум > порог;
+  // Обрезаем, только когда точек много и всплеск одиночный. Пять месяцев,
+  // где каждый следующий больше предыдущего, — это рост, а не выброс.
+  const последнийСамый = items.length &&
+    items[items.length - 1].parts.reduce((s, p) => s + p.v, 0) === максимум;
+  const режем = медиана > 0 && максимум > порог && items.length >= 10 && !последнийСамый;
 
   columns(host, items, { h: 240, max: режем ? порог : undefined });
   if (режем) {
@@ -89,7 +104,7 @@ function блокRaster(host, d) {
       (i < n - 1 || n === 1 ? "var(--serie-1)" : "var(--serie-2)") + '"/>').join("");
     return '<div class="rrow">' + nameCell(r.name, true) +
       '<svg viewBox="0 0 ' + (maxN * 8) + ' 6" preserveAspectRatio="xMinYMid meet">' + cells + "</svg>" +
-      '<span class="rv">' + fmt(r.value) + "</span></div>";
+      '<span class="rv">' + число(r.value, d.format) + "</span></div>";
   }).join("") +
     (d.unitLabel ? '<p class="block-note">Один кусочек — ' + fmt(unit) + " " + d.unitLabel + "</p>" : "");
 }
@@ -105,7 +120,7 @@ function блокTable(host, d) {
     '<th class="barcell">Доля</th></tr></thead><tbody>' +
     rows.map(r => "<tr>" +
       r.map((v, i) => i === 0 ? "<td>" + nameCell(String(v), true) + "</td>"
-                              : '<td class="r">' + fmt(v) + "</td>").join("") +
+                              : '<td class="r">' + число(v, d.format) + "</td>").join("") +
       '<td class="barcell"><span class="rowbar"><span style="width:' +
         ((Number(r[bar]) || 0) / max * 100).toFixed(1) + '%"></span></span></td>' +
     "</tr>").join("") + "</tbody></table></div>";
@@ -116,7 +131,8 @@ function блокList(host, d) {
   const items = d.items || [];
   if (!items.length) return пусто(host, "пусто");
   host.innerHTML = items.map(i =>
-    '<div class="lrow"><span>' + i.name + '</span><span class="num">' + fmt(i.value) + "</span></div>"
+    '<div class="lrow"><span>' + i.name + '</span><span class="num">' +
+    число(i.value, d.format) + "</span></div>"
   ).join("");
 }
 

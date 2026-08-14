@@ -42,14 +42,19 @@ type Row struct {
 
 type RasterData struct {
 	Rows      []Row   `json:"rows"`
+	Format    string  `json:"format,omitempty"`
 	Unit      float64 `json:"unit"`      // сколько величины в одном кусочке
 	UnitLabel string  `json:"unitLabel"` // как подписать кусочек
 }
 
 type StatData struct {
-	Value float64   `json:"value"`
-	Sub   string    `json:"sub"`
-	Spark []float64 `json:"spark,omitempty"`
+	Value float64 `json:"value"`
+	Sub   string  `json:"sub"`
+	// Format — как показывать число: пусто (штуки), "money" (два знака и знак
+	// валюты), "hours". Панель не догадывается сама: 355 и 355,59 $ — разные
+	// вещи, а по самому числу их не различить.
+	Format string    `json:"format,omitempty"`
+	Spark  []float64 `json:"spark,omitempty"`
 	// Parts — разбивка под числом: платформы, источники, что угодно. Панель
 	// рисует их мелкой строкой, поэтому больше трёх-четырёх класть незачем.
 	Parts []Row `json:"parts,omitempty"`
@@ -60,6 +65,7 @@ type StatData struct {
 
 type TableData struct {
 	Cols   []string `json:"cols"`
+	Format string   `json:"format,omitempty"`
 	Rows   [][]any  `json:"rows"`
 	BarCol int      `json:"barCol"` // по какой колонке рисовать полосу
 }
