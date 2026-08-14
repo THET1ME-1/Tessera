@@ -9,6 +9,7 @@ import (
 	"database/sql"
 	_ "embed"
 	"fmt"
+	"strings"
 
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -42,7 +43,29 @@ func Open(path string) (*Store, error) {
 		db.Close()
 		return nil, fmt.Errorf("схема: %w", err)
 	}
+	if err := доправить(db); err != nil {
+		db.Close()
+		return nil, err
+	}
 	return &Store{db: db}, nil
+}
+
+// доправить добавляет колонки, появившиеся после первого выпуска.
+//
+// CREATE TABLE IF NOT EXISTS не трогает уже созданную таблицу, поэтому у чужой
+// установки новая колонка сама не заведётся. Правки только аддитивные: колонку
+// добавляем, ничего не удаляем и не переименовываем — обновление сервера не
+// имеет права ломать чужую базу.
+func доправить(db *sql.DB) error {
+	правки := []string{
+		`ALTER TABLE seen ADD COLUMN platform TEXT`,
+	}
+	for _, п := range правки {
+		if _, err := db.Exec(п); err != nil && !strings.Contains(err.Error(), "duplicate column") {
+			return fmt.Errorf("%s: %w", п, err)
+		}
+	}
+	return nil
 }
 
 func (s *Store) DB() *sql.DB  { return s.db }

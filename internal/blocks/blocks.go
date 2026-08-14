@@ -50,6 +50,12 @@ type StatData struct {
 	Value float64   `json:"value"`
 	Sub   string    `json:"sub"`
 	Spark []float64 `json:"spark,omitempty"`
+	// Parts — разбивка под числом: платформы, источники, что угодно. Панель
+	// рисует их мелкой строкой, поэтому больше трёх-четырёх класть незачем.
+	Parts []Row `json:"parts,omitempty"`
+	// Delta — прирост к прошлому такому же отрезку, в процентах. Пусто, когда
+	// сравнивать не с чем: показывать «+0%» на пустоте нечестно.
+	Delta *float64 `json:"delta,omitempty"`
 }
 
 type TableData struct {

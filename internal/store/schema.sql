@@ -40,9 +40,10 @@ CREATE TABLE IF NOT EXISTS daily (
 
 -- Хеши посетителей по дням: нужны для уникальных, живут три месяца.
 CREATE TABLE IF NOT EXISTS seen (
-  app TEXT NOT NULL,
-  day TEXT NOT NULL,
-  who TEXT NOT NULL,
+  app      TEXT NOT NULL,
+  day      TEXT NOT NULL,
+  who      TEXT NOT NULL,
+  platform TEXT,
   PRIMARY KEY (app, day, who)
 );
 

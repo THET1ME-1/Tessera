@@ -32,10 +32,17 @@ func (s *Store) RollupDay(app, day string) error {
 	if _, err := tx.Exec(`DELETE FROM seen WHERE app=? AND day=?`, app, day); err != nil {
 		return fmt.Errorf("очистить посетителей: %w", err)
 	}
+	// Платформа человека за день — та, с которой он слал события чаще всего:
+	// один и тот же человек бывает и на телефоне, и на планшете.
 	if _, err := tx.Exec(`
-		INSERT OR IGNORE INTO seen (app, day, who)
-		SELECT app, date(ts,'unixepoch'), who FROM events
-		WHERE app=? AND date(ts,'unixepoch')=? AND who IS NOT NULL`, app, day); err != nil {
+		INSERT OR IGNORE INTO seen (app, day, who, platform)
+		SELECT app, день, who, platform FROM (
+			SELECT app, date(ts,'unixepoch') AS день, who, platform, count(*) AS n,
+			       row_number() OVER (PARTITION BY who ORDER BY count(*) DESC) AS место
+			FROM events
+			WHERE app=? AND date(ts,'unixepoch')=? AND who IS NOT NULL
+			GROUP BY who, platform)
+		WHERE место = 1`, app, day); err != nil {
 		return fmt.Errorf("записать посетителей: %w", err)
 	}
 	return tx.Commit()
