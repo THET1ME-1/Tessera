@@ -35,6 +35,7 @@ func (a *API) Routes() *http.ServeMux {
 	mux.Handle("/api/tabs", Middleware(a.secret, http.HandlerFunc(a.tabs)))
 	mux.Handle("/api/labels", Middleware(a.secret, http.HandlerFunc(a.labels)))
 	mux.Handle("/api/modules", Middleware(a.secret, http.HandlerFunc(a.modulesList)))
+	mux.Handle("/api/catalog", Middleware(a.secret, http.HandlerFunc(a.catalog)))
 	// Вход и состояние открыты без куки: иначе панели неоткуда её взять.
 	mux.HandleFunc("/api/login", a.login)
 	mux.HandleFunc("/api/logout", a.logout)
@@ -227,6 +228,29 @@ func (a *API) modulesList(w http.ResponseWriter, r *http.Request) {
 			запись["updated"] = *свежесть
 		}
 		out = append(out, запись)
+	}
+	отдать(w, out)
+}
+
+// catalog — что можно положить на вкладку: блоки ядра плюс то, что предлагают
+// включённые модули. Панель не различает источники, поэтому и список общий.
+func (a *API) catalog(w http.ResponseWriter, r *http.Request) {
+	out := []map[string]any{}
+	for _, b := range blocks.Каталог() {
+		out = append(out, map[string]any{"block": b, "owner": "Ядро"})
+	}
+	ms, _ := modules.Load(a.modulesDir)
+	for _, m := range ms {
+		for _, b := range m.Tiles {
+			out = append(out, map[string]any{"block": b, "owner": m.Name})
+		}
+		// Блоки со вкладок модуля тоже можно вынести на обзор: модуль
+		// предлагает, а раскладывает человек.
+		for _, t := range m.Tabs {
+			for _, b := range t.Blocks {
+				out = append(out, map[string]any{"block": b, "owner": m.Name})
+			}
+		}
 	}
 	отдать(w, out)
 }

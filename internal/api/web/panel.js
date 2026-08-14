@@ -13,6 +13,8 @@ const state = {
   theme: "auto",
   rawNames: false,
   вкладки: [],
+  настройка: false,   // режим правки раскладки
+  блоки: [],          // раскладка открытой вкладки
 };
 
 const $ = id => document.getElementById(id);
@@ -112,21 +114,36 @@ async function нарисоватьВкладку() {
   }
 
   const блоки = раскладка.blocks || [];
-  if (!блоки.length) {
-    view.innerHTML = '<p class="block-empty">На этой вкладке пока нет блоков.</p>';
-    return;
-  }
+  state.блоки = блоки;
 
-  view.innerHTML = '<div class="grid">' + блоки.map((b, i) =>
-    '<section class="panel c' + (b.span || 12) + '">' +
-      '<div class="panel-head"><span class="lbl">' + b.title + "</span>" +
-      // Владельца подписываем, только когда он не ядро: «core» у каждого
-      // второго блока — шум, а имя модуля объясняет, откуда взялись числа.
-      (b.src.startsWith("core:") ? "" :
-        '<span class="lbl">' + (модули[b.src.split(":")[0]] || b.src.split(":")[0]) + "</span>") +
-      "</div>" +
-      '<div id="блок-' + i + '"><p class="block-empty">…</p></div>' +
-    "</section>").join("") + "</div>";
+  view.innerHTML = панельНастройки() +
+    (блоки.length
+      ? '<div class="grid" id="сетка">' + блоки.map((b, i) =>
+          '<section class="panel c' + (b.span || 12) + '" data-idx="' + i + '"' +
+            (state.настройка ? ' draggable="true"' : "") + ">" +
+            '<div class="panel-head"><span class="lbl">' + b.title + "</span>" +
+            // Владельца подписываем, только когда он не ядро: «core» у каждого
+            // второго блока — шум, а имя модуля объясняет, откуда числа.
+            (b.src.startsWith("core:") ? "" :
+              '<span class="lbl">' + (модули[b.src.split(":")[0]] || b.src.split(":")[0]) + "</span>") +
+            (state.настройка
+              ? '<button class="block-x" data-remove="' + i + '" title="Убрать блок">×</button>'
+              : "") +
+            "</div>" +
+            '<div id="блок-' + i + '">' +
+              (state.настройка
+                // В настройке числа не грузим: важна раскладка. Но пустое тело
+                // читается как поломка, поэтому блок называет себя сам.
+                ? '<p class="block-empty">' + b.type + " · " + b.src + "</p>"
+                : '<p class="block-empty">…</p>') +
+            "</div>" +
+          "</section>").join("") + "</div>"
+      : '<p class="block-empty">На этой вкладке пока нет блоков. Нажмите «Настроить» и добавьте.</p>');
+
+  if (state.настройка) {
+    подключитьПеретаскивание();
+    return; // в настройке числа не грузим: важна раскладка, а не данные
+  }
 
   // Запросы идут разом: один медленный источник не держит остальные.
   блоки.forEach((b, i) => {
@@ -143,6 +160,100 @@ async function нарисоватьВкладку() {
       });
   });
 }
+
+function панельНастройки() {
+  if (!state.настройка) {
+    return '<div class="edit-bar"><button class="ghost-btn" id="начатьНастройку">' +
+      "Настроить вкладку</button></div>";
+  }
+  return '<div class="edit-bar edit-on">' +
+    "<span class=\"lbl\">Блок берётся за заголовок и переставляется мышью</span>" +
+    '<button class="ghost-btn" id="добавитьБлок">Добавить блок</button>' +
+    '<button class="ghost-btn" id="сброситьРаскладку">Вернуть заводскую</button>' +
+    '<button class="btn" id="закончитьНастройку">Готово</button></div>';
+}
+
+/* Перетаскивание: блок берётся за себя целиком, порядок меняется на месте и
+   сразу уходит на сервер — «сохранить» тут лишняя кнопка. */
+function подключитьПеретаскивание() {
+  const сетка = $("сетка");
+  if (!сетка) return;
+  let взятый = null;
+
+  сетка.querySelectorAll(".panel").forEach(node => {
+    node.addEventListener("dragstart", e => {
+      взятый = node;
+      node.classList.add("dragging");
+      e.dataTransfer.effectAllowed = "move";
+    });
+    node.addEventListener("dragend", async () => {
+      node.classList.remove("dragging");
+      взятый = null;
+      const порядок = [...сетка.querySelectorAll(".panel")].map(n => Number(n.dataset.idx));
+      state.блоки = порядок.map(i => state.блоки[i]);
+      await сохранитьРаскладку();
+    });
+    node.addEventListener("dragover", e => {
+      e.preventDefault();
+      if (!взятый || взятый === node) return;
+      const r = node.getBoundingClientRect();
+      const после = (e.clientY - r.top) / r.height > 0.5;
+      node.parentNode.insertBefore(взятый, после ? node.nextSibling : node);
+    });
+  });
+}
+
+async function сохранитьРаскладку() {
+  await послать("/api/layout", { tab: state.tab, blocks: state.блоки });
+  нарисоватьВкладку();
+}
+
+/* Что можно добавить: блоки ядра и то, что предлагают модули. */
+async function показатьКаталог() {
+  const каталог = await взять("/api/catalog");
+  const лист = document.createElement("div");
+  лист.className = "sheet";
+  лист.innerHTML = '<div class="sheet-card"><div class="panel-head">' +
+    '<span class="lbl">Добавить блок</span>' +
+    '<button class="block-x" id="закрытьЛист" title="Закрыть">×</button></div>' +
+    каталог.map((c, i) =>
+      '<button class="cat-row" data-cat="' + i + '">' +
+      "<span>" + c.block.title + "</span>" +
+      '<span class="lbl">' + c.owner + " · " + c.block.type + "</span></button>").join("") +
+    "</div>";
+  document.body.appendChild(лист);
+
+  лист.addEventListener("click", async e => {
+    if (e.target === лист || e.target.closest("#закрытьЛист")) { лист.remove(); return; }
+    const кнопка = e.target.closest("[data-cat]");
+    if (!кнопка) return;
+    state.блоки = [...state.блоки, каталог[Number(кнопка.dataset.cat)].block];
+    лист.remove();
+    await сохранитьРаскладку();
+  });
+}
+
+document.addEventListener("click", async e => {
+  if (e.target.closest("#начатьНастройку")) {
+    state.настройка = true;
+    нарисоватьВкладку();
+  } else if (e.target.closest("#закончитьНастройку")) {
+    state.настройка = false;
+    нарисоватьВкладку();
+  } else if (e.target.closest("#добавитьБлок")) {
+    показатьКаталог();
+  } else if (e.target.closest("#сброситьРаскладку")) {
+    // Пустая раскладка означает «отдавай заводскую»: сервер сам подставит её.
+    await послать("/api/layout", { tab: state.tab, blocks: [] });
+    await fetch("/api/layout?tab=" + encodeURIComponent(state.tab), { credentials: "same-origin" });
+    state.настройка = false;
+    нарисоватьВкладку();
+  } else if (e.target.closest("[data-remove]")) {
+    const i = Number(e.target.closest("[data-remove]").dataset.remove);
+    state.блоки = state.блоки.filter((_, j) => j !== i);
+    await сохранитьРаскладку();
+  }
+});
 
 async function загрузитьМодули() {
   const список = await взять("/api/modules").catch(() => []);
