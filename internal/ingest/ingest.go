@@ -134,7 +134,9 @@ func (in *Ingest) Handler() http.Handler {
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusAccepted)
-		json.NewEncoder(w).Encode(map[string]any{"ok": true, "accepted": len(evs)})
+		// «Принято», а не «записано»: дедупликацию делает база при сбросе
+		// буфера, и знать её итог клиенту незачем — повтор для него безопасен.
+		json.NewEncoder(w).Encode(map[string]any{"ok": true, "received": len(evs)})
 
 		if накопилось >= порогСброса {
 			go in.Flush()

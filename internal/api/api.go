@@ -35,6 +35,10 @@ func (a *API) Routes() *http.ServeMux {
 	mux.Handle("/api/tabs", Middleware(a.secret, http.HandlerFunc(a.tabs)))
 	mux.Handle("/api/labels", Middleware(a.secret, http.HandlerFunc(a.labels)))
 	mux.Handle("/api/modules", Middleware(a.secret, http.HandlerFunc(a.modulesList)))
+	// Вход и состояние открыты без куки: иначе панели неоткуда её взять.
+	mux.HandleFunc("/api/login", a.login)
+	mux.HandleFunc("/api/logout", a.logout)
+	mux.HandleFunc("/api/state", a.state)
 	return mux
 }
 

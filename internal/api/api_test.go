@@ -182,3 +182,44 @@ func TestМолчавшийМодульОтвечает404АНеПадением
 		t.Fatalf("код %d, ждали 404", rec.Code)
 	}
 }
+
+func TestВходВыдаётКукуТолькоПоПаролю(t *testing.T) {
+	a, _ := стенд(t)
+	if err := SetPassword(a.s, "секрет"); err != nil {
+		t.Fatal(err)
+	}
+
+	rec := запрос(t, a, "POST", "/api/login", "", `{"password":"не тот"}`)
+	if rec.Code != 401 {
+		t.Fatalf("неверный пароль: код %d, ждали 401", rec.Code)
+	}
+
+	rec = запрос(t, a, "POST", "/api/login", "", `{"password":"секрет"}`)
+	if rec.Code != 200 {
+		t.Fatalf("верный пароль: код %d, %s", rec.Code, rec.Body.String())
+	}
+	куки := rec.Result().Cookies()
+	if len(куки) == 0 || куки[0].Name != "tessera" || куки[0].Value == "" {
+		t.Fatalf("кука не выдана: %+v", куки)
+	}
+	if !куки[0].HttpOnly {
+		t.Fatal("кука доступна скриптам страницы")
+	}
+
+	// Выданной кукой панель сразу открывает данные.
+	rec2 := запрос(t, a, "GET", "/api/tabs", куки[0].Value, "")
+	if rec2.Code != 200 {
+		t.Fatalf("с выданной кукой код %d", rec2.Code)
+	}
+}
+
+func TestСостояниеОтвечаетБезКуки(t *testing.T) {
+	a, _ := стенд(t)
+	rec := запрос(t, a, "GET", "/api/state", "", "")
+	if rec.Code != 200 {
+		t.Fatalf("код %d, ждали 200: состояние нужно до входа", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), `"signedIn":false`) {
+		t.Fatalf("ответ без куки: %s", rec.Body.String())
+	}
+}
