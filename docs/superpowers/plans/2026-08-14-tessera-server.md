@@ -407,9 +407,9 @@ func TestСводкаСчитаетОткрытияИЛюдей(t *testing.T) {
 	s := открыть(t)
 	// 2026-08-14 12:00 UTC и рядом
 	evs := []Event{
-		{EID: "1", TS: 1786785600, Kind: "screen", Name: "memory_lane", MS: 5000, Who: "ху1"},
-		{EID: "2", TS: 1786785601, Kind: "screen", Name: "memory_lane", MS: 3000, Who: "ху1"},
-		{EID: "3", TS: 1786785602, Kind: "screen", Name: "memory_lane", MS: 1000, Who: "ху2"},
+		{EID: "1", TS: 1786708800, Kind: "screen", Name: "memory_lane", MS: 5000, Who: "ху1"},
+		{EID: "2", TS: 1786708801, Kind: "screen", Name: "memory_lane", MS: 3000, Who: "ху1"},
+		{EID: "3", TS: 1786708802, Kind: "screen", Name: "memory_lane", MS: 1000, Who: "ху2"},
 	}
 	if _, err := s.InsertEvents("togetherly", evs); err != nil {
 		t.Fatal(err)
@@ -433,7 +433,7 @@ func TestСводкаСчитаетОткрытияИЛюдей(t *testing.T) {
 func TestПовторныйПересчётНеУдваивает(t *testing.T) {
 	s := открыть(t)
 	s.InsertEvents("togetherly", []Event{
-		{EID: "1", TS: 1786785600, Kind: "action", Name: "memory_added", Who: "ху1"},
+		{EID: "1", TS: 1786708800, Kind: "action", Name: "memory_added", Who: "ху1"},
 	})
 	for i := 0; i < 3; i++ {
 		if err := s.RollupDay("togetherly", "2026-08-14"); err != nil {
@@ -713,7 +713,7 @@ func стенд(t *testing.T, people bool) (*store.Store, http.Handler, string) 
 }
 
 const тело = `{"app":"togetherly","sdk":"flutter 0.4.1","events":[
-  {"eid":"a1","ts":1786785600,"kind":"screen","name":"memory_lane","ms":5000,
+  {"eid":"a1","ts":1786708800,"kind":"screen","name":"memory_lane","ms":5000,
    "platform":"android","version":"1.28.2"}]}`
 
 func TestПриёмОтвечает202(t *testing.T) {
@@ -968,9 +968,9 @@ func стенд(t *testing.T) *store.Store {
 	t.Cleanup(func() { s.Close() })
 	s.CreateApp("togetherly", "Togetherly")
 	s.InsertEvents("togetherly", []store.Event{
-		{EID: "1", TS: 1786785600, Kind: "screen", Name: "memory_lane", MS: 5000, Who: "ху1"},
-		{EID: "2", TS: 1786785601, Kind: "screen", Name: "draw", MS: 9000, Who: "ху2"},
-		{EID: "3", TS: 1786785602, Kind: "action", Name: "memory_added", Who: "ху1"},
+		{EID: "1", TS: 1786708800, Kind: "screen", Name: "memory_lane", MS: 5000, Who: "ху1"},
+		{EID: "2", TS: 1786708801, Kind: "screen", Name: "draw", MS: 9000, Who: "ху2"},
+		{EID: "3", TS: 1786708802, Kind: "action", Name: "memory_added", Who: "ху1"},
 	})
 	if err := s.RollupDay("togetherly", "2026-08-14"); err != nil {
 		t.Fatal(err)
@@ -1649,7 +1649,7 @@ func стенд(t *testing.T) (*API, string) {
 	t.Cleanup(func() { s.Close() })
 	s.CreateApp("togetherly", "Togetherly")
 	s.InsertEvents("togetherly", []store.Event{
-		{EID: "1", TS: 1786785600, Kind: "screen", Name: "memory_lane", MS: 5000},
+		{EID: "1", TS: 1786708800, Kind: "screen", Name: "memory_lane", MS: 5000},
 	})
 	s.RollupDay("togetherly", "2026-08-14")
 	SetPassword(s, "пароль")
