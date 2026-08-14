@@ -19,6 +19,12 @@ const state = {
 
 const $ = id => document.getElementById(id);
 
+/* Панель может стоять не в корне, а за префиксом вроде /tessera.
+   Адреса считаются от места, откуда пришла страница. */
+const КОРЕНЬ = location.pathname.replace(/\/[^/]*$/, "/");
+const адрес = путь => КОРЕНЬ + путь.replace(/^\//, "");
+
+
 /* ── разговор с сервером ────────────────────────────────────────────────── */
 
 async function взять(путь) {
@@ -51,7 +57,7 @@ function показатьВход(подсказка) {
 }
 
 async function проверитьВход() {
-  const s = await взять("/api/state").catch(() => ({ signedIn: false, passwordSet: false }));
+  const s = await взять(адрес("/api/state")).catch(() => ({ signedIn: false, passwordSet: false }));
   if (!s.passwordSet) {
     показатьВход("Пароль ещё не задан. Запустите сервер с флагом --password один раз.");
     return false;
@@ -68,7 +74,7 @@ async function проверитьВход() {
 $("gateForm").addEventListener("submit", async e => {
   e.preventDefault();
   try {
-    await послать("/api/login", { password: $("pass").value });
+    await послать(адрес("/api/login"), { password: $("pass").value });
     $("pass").value = "";
     $("gateNote").textContent = "";
     await запустить();
@@ -78,14 +84,14 @@ $("gateForm").addEventListener("submit", async e => {
 });
 
 $("signout").addEventListener("click", async () => {
-  await fetch("/api/logout", { credentials: "same-origin" });
+  await fetch(адрес("/api/logout"), { credentials: "same-origin" });
   location.reload();
 });
 
 /* ── вкладки и раскладка ────────────────────────────────────────────────── */
 
 async function загрузитьВкладки() {
-  state.вкладки = await взять("/api/tabs");
+  state.вкладки = await взять(адрес("/api/tabs"));
   $("tabs").innerHTML = state.вкладки.map(t =>
     '<button role="tab" data-tab="' + t.id + '" aria-selected="' + (t.id === state.tab) + '">' +
     (t.mod ? '<span class="frag" title="вкладку принёс модуль"></span>' : "") +
@@ -107,7 +113,7 @@ async function нарисоватьВкладку() {
 
   let раскладка;
   try {
-    раскладка = await взять("/api/layout?tab=" + encodeURIComponent(state.tab));
+    раскладка = await взять(адрес("/api/layout?tab=") + encodeURIComponent(state.tab));
   } catch (e) {
     view.innerHTML = '<p class="block-empty">Вкладка не открылась: ' + e.message + "</p>";
     return;
@@ -148,10 +154,10 @@ async function нарисоватьВкладку() {
   // Запросы идут разом: один медленный источник не держит остальные.
   блоки.forEach((b, i) => {
     const host = $("блок-" + i);
-    const адрес = "/api/block?src=" + encodeURIComponent(b.src) +
+    const ссылка = адрес("/api/block") + "?src=" + encodeURIComponent(b.src) +
       "&range=" + encodeURIComponent(state.range) +
       (state.app ? "&app=" + encodeURIComponent(state.app) : "");
-    взять(адрес)
+    взять(ссылка)
       .then(d => нарисовать(host, b.type, d, b))
       .catch(e => {
         host.innerHTML = '<p class="block-empty">' +
@@ -204,13 +210,13 @@ function подключитьПеретаскивание() {
 }
 
 async function сохранитьРаскладку() {
-  await послать("/api/layout", { tab: state.tab, blocks: state.блоки });
+  await послать(адрес("/api/layout"), { tab: state.tab, blocks: state.блоки });
   нарисоватьВкладку();
 }
 
 /* Что можно добавить: блоки ядра и то, что предлагают модули. */
 async function показатьКаталог() {
-  const каталог = await взять("/api/catalog");
+  const каталог = await взять(адрес("/api/catalog"));
   const лист = document.createElement("div");
   лист.className = "sheet";
   лист.innerHTML = '<div class="sheet-card"><div class="panel-head">' +
@@ -244,8 +250,8 @@ document.addEventListener("click", async e => {
     показатьКаталог();
   } else if (e.target.closest("#сброситьРаскладку")) {
     // Пустая раскладка означает «отдавай заводскую»: сервер сам подставит её.
-    await послать("/api/layout", { tab: state.tab, blocks: [] });
-    await fetch("/api/layout?tab=" + encodeURIComponent(state.tab), { credentials: "same-origin" });
+    await послать(адрес("/api/layout"), { tab: state.tab, blocks: [] });
+    await fetch(адрес("/api/layout") + "?tab=" + encodeURIComponent(state.tab), { credentials: "same-origin" });
     state.настройка = false;
     нарисоватьВкладку();
   } else if (e.target.closest("[data-remove]")) {
@@ -256,14 +262,14 @@ document.addEventListener("click", async e => {
 });
 
 async function загрузитьМодули() {
-  const список = await взять("/api/modules").catch(() => []);
+  const список = await взять(адрес("/api/modules")).catch(() => []);
   список.forEach(m => { модули[m.id] = m.name; });
 }
 
 /* Строка контекста: сколько событий в базе и за какой срок они живут. */
 async function подписатьШапку() {
   try {
-    const d = await взять("/api/block?src=core:events_total&range=" + state.range);
+    const d = await взять(адрес("/api/block?src=core:events_total&range=") + state.range);
     $("ctx-events").textContent = fmt(d.value);
   } catch { $("ctx-events").textContent = "—"; }
 }
@@ -271,7 +277,7 @@ async function подписатьШапку() {
 /* ── словарь имён ───────────────────────────────────────────────────────── */
 
 async function загрузитьИмена() {
-  const d = await взять("/api/labels?app=" + encodeURIComponent(state.app)).catch(() => ({}));
+  const d = await взять(адрес("/api/labels?app=") + encodeURIComponent(state.app)).catch(() => ({}));
   Object.keys(labels).forEach(k => delete labels[k]);
   Object.assign(labels, d);
 }
@@ -298,7 +304,7 @@ document.addEventListener("click", e => {
     закрыто = true;
     if (сохранить) {
       const имя = поле.value.trim();
-      await послать("/api/labels", { app: state.app, key: ключ, title: имя === ключ ? "" : имя });
+      await послать(адрес("/api/labels"), { app: state.app, key: ключ, title: имя === ключ ? "" : имя });
       await загрузитьИмена();
     }
     нарисоватьВкладку();

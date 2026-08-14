@@ -254,10 +254,10 @@ function блокShelf(host, d, блок) {
 
   const перерисовать = async () => {
     host.innerHTML = '<p class="block-empty">Загружаю ленту…</p>';
-    const адрес = "/api/query?src=" + encodeURIComponent(src) +
+    const ссылка = адрес("/api/query") + "?src=" + encodeURIComponent(src) +
       "&page=" + host.dataset.page + (host.dataset.kind ? "&kind=" + encodeURIComponent(host.dataset.kind) : "");
     try {
-      блокShelf(host, await взять(адрес), блок);
+      блокShelf(host, await взять(ссылка), блок);
     } catch (e) {
       пусто(host, "лента не пришла: " + e.message);
     }
@@ -285,7 +285,7 @@ function открытьКадр(items, i) {
   слой.className = "light";
   const показать = n => {
     const it = items[(n + items.length) % items.length];
-    слой.innerHTML = '<img src="' + it.url.replace("&w=512", "") + '&w=1600" alt="">' +
+    слой.innerHTML = '<img src="' + адрес(it.url) + '&w=1600" alt="">' +
       '<div class="light-bar"><span class="lbl">' + (it.caption || "") + " · " +
       (it.group || "") + "</span></div>";
     слой.dataset.i = String((n + items.length) % items.length);
