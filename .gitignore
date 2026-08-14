@@ -1,0 +1,10 @@
+CLAUDE.md
+CLAUDE.local.md
+.claude/
+data/
+*.db
+*.db-wal
+*.db-shm
+dist/
+tessera
+.env
