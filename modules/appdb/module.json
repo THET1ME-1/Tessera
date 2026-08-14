@@ -196,7 +196,7 @@
           "Живы через 7 дней",
           "Живы через 30"
         ],
-        "query": "SELECT strftime('%Y, неделя %W', created) AS неделя, count(*), sum(CASE WHEN updated > datetime(created,'+7 day') THEN 1 ELSE 0 END), sum(CASE WHEN updated > datetime(created,'+30 day') THEN 1 ELSE 0 END) FROM users WHERE created > datetime('now','-60 day') GROUP BY неделя ORDER BY неделя"
+        "query": "SELECT strftime('%Y, неделя %W', created) AS неделя, count(*), CASE WHEN max(created) < datetime('now','-7 day')      THEN sum(CASE WHEN updated > datetime(created,'+7 day') THEN 1 ELSE 0 END) END, CASE WHEN max(created) < datetime('now','-30 day')      THEN sum(CASE WHEN updated > datetime(created,'+30 day') THEN 1 ELSE 0 END) END FROM users WHERE created > datetime('now','-60 day') GROUP BY неделя ORDER BY неделя"
       },
       "pairs_life": {
         "type": "stat",

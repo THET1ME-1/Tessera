@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Tessera</title>
+<link rel="stylesheet" href="panel.css">
+</head>
+<body>
+
+<!-- Вход. Показывается, пока сервер не признал куку. -->
+<div class="gate" id="gate" hidden>
+  <form class="gate-card" id="gateForm">
+    <span class="brand" style="margin-bottom:18px">
+      <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true">
+        <rect x="0" y="0" width="8.5" height="8.5" rx="2.2" fill="currentColor"/>
+        <rect x="11.5" y="0" width="8.5" height="8.5" rx="2.2" fill="currentColor" opacity=".3"/>
+        <rect x="0" y="11.5" width="8.5" height="8.5" rx="2.2" fill="currentColor" opacity=".3"/>
+        <rect x="11.5" y="11.5" width="8.5" height="8.5" rx="2.2" fill="currentColor"/>
+      </svg>
+      Tessera
+    </span>
+    <label class="lbl" for="pass">Пароль</label>
+    <input id="pass" type="password" autocomplete="current-password" autofocus>
+    <button class="btn" type="submit">Войти</button>
+    <p class="gate-note" id="gateNote"></p>
+  </form>
+</div>
+
+<!-- Панель. -->
+<div class="wrap" id="root" hidden>
+  <header class="topbar">
+    <span class="brand">
+      <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true">
+        <rect x="0" y="0" width="8.5" height="8.5" rx="2.2" fill="currentColor"/>
+        <rect x="11.5" y="0" width="8.5" height="8.5" rx="2.2" fill="currentColor" opacity=".3"/>
+        <rect x="0" y="11.5" width="8.5" height="8.5" rx="2.2" fill="currentColor" opacity=".3"/>
+        <rect x="11.5" y="11.5" width="8.5" height="8.5" rx="2.2" fill="currentColor"/>
+      </svg>
+      Tessera
+    </span>
+    <div class="appsel">
+      <span class="dot" id="appdot"></span>
+      <select id="appselect" aria-label="Приложение"></select>
+    </div>
+    <div class="spacer"></div>
+    <div class="seg" role="group" aria-label="Период" id="ranges">
+      <button data-range="7d">7 дней</button>
+      <button data-range="15d" aria-pressed="true">15 дней</button>
+      <button data-range="30d">30 дней</button>
+      <button data-range="all">Всё время</button>
+    </div>
+    <button class="ghost-btn" id="signout" title="Выйти">Выйти</button>
+  </header>
+
+  <div class="context">
+    <div class="ctx-cell"><span class="lbl">Сбор</span><span class="ctx-v" id="ctx-range">—</span></div>
+    <div class="ctx-cell"><span class="lbl">События</span><span class="ctx-v num" id="ctx-events">—</span></div>
+    <div class="ctx-cell grow"><span class="lbl">Хранение</span><span class="ctx-v" id="ctx-keep">свой сервер</span></div>
+    <div class="ctx-cell">
+      <span class="switch" id="rawSwitch" role="switch" aria-checked="false" tabindex="0">
+        <span class="track"><span class="knob"></span></span>
+        <span style="font-size:12.5px">Ключи из кода</span>
+      </span>
+    </div>
+  </div>
+
+  <nav class="tabs" id="tabs" role="tablist"></nav>
+  <main id="view"></main>
+
+  <div class="foot">
+    <span id="foot-src">Данные с этого сервера</span>
+    <span id="foot-updated"></span>
+  </div>
+</div>
+
+<div class="tip" id="tip" role="status" aria-live="polite"></div>
+
+<div class="dirbar">
+  <span class="lbl">Тема</span>
+  <div class="dirgroup" role="group" aria-label="Тема">
+    <button data-theme-set="auto" aria-pressed="true">Авто</button>
+    <button data-theme-set="light">Светлая</button>
+    <button data-theme-set="dark">Тёмная</button>
+  </div>
+</div>
+
+<script src="draw.js"></script>
+<script src="blocks.js"></script>
+<script src="panel.js"></script>
+</body>
+</html>
