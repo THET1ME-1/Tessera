@@ -17,6 +17,7 @@
 import json
 import os
 import sqlite3
+import subprocess
 import sys
 
 ЗДЕСЬ = os.path.dirname(os.path.abspath(__file__))
@@ -129,6 +130,11 @@ def лента(параметры):
             "group": группа,
             "video": (файл or "").lower().endswith((".mp4", ".mov", ".webm")),
         })
+    # Прогрев пачкой. Страница просит шестьдесят кадров, и если каждый промах
+    # будет запускать свой генератор, на сервере случится лавина процессов.
+    # Один вызов на всю страницу дешевле в разы, а ответ его не ждёт.
+    прогреть([э["id"] for э in элементы], ист)
+
     return {
         "items": элементы,
         "page": страница,
@@ -136,6 +142,26 @@ def лента(параметры):
         "pages": (всего + НА_СТРАНИЦЕ - 1) // НА_СТРАНИЦЕ,
         "kinds": [и for и, в in ВИДЫ.items() if в],
     }
+
+
+def прогреть(ids, ист):
+    """Просит генератор сделать миниатюры для тех кадров, которых ещё нет."""
+    команда = ист.get("make")
+    шаблон = ист.get("thumb", "")
+    if not команда or not шаблон or not ids:
+        return
+    нет = [i for i in ids
+           if not os.path.exists(шаблон.replace("{id}", i).replace("{w}", "512"))]
+    if not нет:
+        return
+    try:
+        # Не ждём: ответ уходит сразу, кадры доедут к моменту, когда браузер
+        # запросит картинки. Опоздавшие закроет промах поштучно.
+        subprocess.Popen([*команда, "--ids", ",".join(нет[:60])],
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                         start_new_session=True)
+    except OSError as e:
+        print(f"генератор миниатюр не запустился: {e}", file=sys.stderr)
 
 
 def человечный(вид):
@@ -172,9 +198,23 @@ def миниатюра(параметры):
         if os.path.exists(путь):
             return {"path": путь, "type": "image/webp"}
 
-    # Кэш греется кроном и отстаёт от свежих загрузок. Это не ошибка модуля:
-    # панель покажет плашку, а через десять минут кадр появится сам.
-    ошибка(f"миниатюры ещё нет: {id_}")
+    # Кэш греет крон приложения, но он берёт последние шестьсот записей раз в
+    # десять минут, а загружают быстрее — свежий кадр не успевает попасть в
+    # прогрев никогда. Поэтому промах не ждём, а просим генератор сделать
+    # именно этот файл: у него для такого есть отдельный режим.
+    команда = ист.get("make")
+    if команда:
+        try:
+            subprocess.run([*команда, "--ids", id_], timeout=8, check=False,
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except (OSError, subprocess.TimeoutExpired) as e:
+            print(f"генератор миниатюр не отозвался: {e}", file=sys.stderr)
+        for w in [хотят, "512", "1600"]:
+            путь = шаблон.replace("{id}", id_).replace("{w}", w)
+            if os.path.exists(путь):
+                return {"path": путь, "type": "image/webp"}
+
+    ошибка(f"миниатюры нет и сделать не вышло: {id_}")
 
 
 def main():

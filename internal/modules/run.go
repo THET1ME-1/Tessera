@@ -13,7 +13,13 @@ import (
 const (
 	таймаутСбора   = 60 * time.Second
 	таймаутЗапроса = 5 * time.Second
+	// Одновременных запусков модулей. Лента просит шестьдесят кадров разом, и
+	// без ограничителя сервер приложения получил бы шестьдесят чужих
+	// процессов — на живой машине это заметно всем, включая само приложение.
+	разом = 4
 )
+
+var очередь = make(chan struct{}, разом)
 
 // Collect запускает модуль с командой collect и разбирает его вывод как
 // словарь «ключ → данные блока». Данные потом ложатся в module_data, и панель
@@ -56,6 +62,15 @@ func QueryWithTimeout(m Manifest, dir, key string, args any, мс int) (json.Raw
 func запустить(m Manifest, dir string, срок time.Duration, args ...string) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), срок)
 	defer cancel()
+
+	// Место в очереди ждём в пределах того же срока: лучше честный отказ, чем
+	// сотня процессов, задушивших сервер.
+	select {
+	case очередь <- struct{}{}:
+		defer func() { <-очередь }()
+	case <-ctx.Done():
+		return nil, fmt.Errorf("модуль %s не дождался очереди", m.ID)
+	}
 
 	cmd := exec.CommandContext(ctx, m.Run[0], append(append([]string{}, m.Run[1:]...), args...)...)
 	cmd.Dir = dir
