@@ -302,6 +302,54 @@ def поиск_пары(параметры):
                      "сообщений", "заведена"], "rows": ряды}
 
 
+def поиск_человека(параметры):
+    """Найти человека по почте, имени или огрызку id.
+
+    Показывает то, что нужно поддержке в первую минуту разговора: с чего он
+    заходит, есть ли Togetherly+ и откуда он взялся, сколько монет, когда
+    завёл учётку и в скольких парах состоит. Переписку и содержимое не
+    показываем: для разбора жалобы этого не нужно.
+    """
+    ист, _ = настройки()
+    запрос = str(параметры.get("q", "")).strip()
+    колонки = ["человек", "имя", "почта", "устройство", "Togetherly+",
+               "монет", "пар", "завёл"]
+    if len(запрос) < 3:
+        return {"cols": колонки, "rows": []}
+
+    к = f"%{запрос.lower()}%"
+    conn = база(ист.get("db", ""))
+    try:
+        строки = conn.execute(
+            "SELECT id, coalesce(display_name,''), coalesce(email,''), "
+            "coalesce(platform,''), coalesce(plus,0), coalesce(plus_platform,''), "
+            "coalesce(coins,0), coalesce(group_ids,''), coalesce(created,''), "
+            "coalesce(apns_token,''), coalesce(fcm_token,'') "
+            "FROM users WHERE lower(email) LIKE ? "
+            "OR lower(coalesce(display_name,'')) LIKE ? OR id LIKE ? "
+            "ORDER BY created DESC LIMIT 25", (к, к, f"%{запрос}%")).fetchall()
+    finally:
+        conn.close()
+
+    ряды = []
+    for (uid, имя, почта, плат, плюс, канал, монеты, пары, когда,
+         apns, fcm) in строки:
+        # Платформу знает не только поле профиля: оно пишется свежими
+        # сборками, а пуш-токен говорит об устройстве точно.
+        устройство = ({"android": "Android", "ios": "iPhone"}.get(плат)
+                      or ("iPhone" if apns else "Android" if fcm else "—"))
+        try:
+            сколько_пар = len(json.loads(пары or "[]") or [])
+        except ValueError:
+            сколько_пар = 0
+        ряды.append([
+            uid, имя or "—", почта or "—", устройство,
+            ("да · " + канал if канал else "да") if плюс else "нет",
+            int(монеты), сколько_пар, (когда or "")[:10],
+        ])
+    return {"cols": колонки, "rows": ряды}
+
+
 def main():
     команда = sys.argv[1] if len(sys.argv) > 1 else "collect"
     if команда == "collect":
@@ -317,6 +365,8 @@ def main():
         print(json.dumps(лента(параметры), ensure_ascii=False))
     elif ключ == "pairs":
         print(json.dumps(поиск_пары(параметры), ensure_ascii=False))
+    elif ключ == "people":
+        print(json.dumps(поиск_человека(параметры), ensure_ascii=False))
     elif ключ == "thumb":
         print(json.dumps(миниатюра(параметры), ensure_ascii=False))
     else:

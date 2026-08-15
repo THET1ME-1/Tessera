@@ -89,6 +89,18 @@
           "title": "Сколько живёт пара",
           "span": 5,
           "src": "appdb:pairs_life"
+        },
+        {
+          "type": "stat",
+          "title": "Смотрели вместе",
+          "span": 3,
+          "src": "appdb:watch_total"
+        },
+        {
+          "type": "raster",
+          "title": "Что включают",
+          "span": 6,
+          "src": "appdb:watch_kinds"
         }
       ]
     }
@@ -215,6 +227,18 @@
         "sub": "файлов в медиатеке",
         "query": "SELECT count(*) FROM media",
         "parts": "SELECT kind, count(*) FROM media GROUP BY kind ORDER BY 2 DESC LIMIT 6"
+      },
+      "watch_total": {
+        "type": "stat",
+        "sub": "включений за неделю",
+        "query": "SELECT count(*) FROM watch_history WHERE created > datetime('now','-7 day')",
+        "parts": "SELECT 'пар смотрели', count(DISTINCT group_id) FROM watch_history WHERE created > datetime('now','-7 day')",
+        "delta": "SELECT count(*) FROM watch_history WHERE created > datetime('now','-14 day') AND created <= datetime('now','-7 day')"
+      },
+      "watch_kinds": {
+        "type": "raster",
+        "query": "SELECT case when coalesce(kind,'')='' then 'ссылка' else kind end, count(*) FROM watch_history WHERE created > datetime('now','-30 day') GROUP BY 1 ORDER BY 2 DESC LIMIT 8",
+        "unitLabel": "включений"
       }
     },
     "pg": ""

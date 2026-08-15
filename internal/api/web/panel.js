@@ -186,6 +186,10 @@ async function нарисоватьВкладку() {
   // Запросы идут разом: один медленный источник не держит остальные.
   блоки.forEach((b, i) => {
     const host = $("блок-" + i);
+    // Поиск заранее ничего не считает: ответы зависят от запроса, и собирать
+    // их расписанием бессмысленно. Рисуем поле ввода сразу, а за данными блок
+    // сходит сам, когда человек нажмёт «Найти».
+    if (b.type === "search") return нарисовать(host, b.type, null, b);
     const ссылка = адрес("/api/block") + "?src=" + encodeURIComponent(b.src) +
       "&range=" + encodeURIComponent(state.range) +
       (state.app ? "&app=" + encodeURIComponent(state.app) : "");

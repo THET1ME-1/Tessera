@@ -21,6 +21,13 @@
           "placeholder": "id пары, имя участника или почта"
         },
         {
+          "type": "search",
+          "title": "Найти человека",
+          "span": 12,
+          "src": "moderation:people",
+          "placeholder": "почта, имя или id"
+        },
+        {
           "type": "stat",
           "title": "Файлов в хранилище",
           "span": 4,
