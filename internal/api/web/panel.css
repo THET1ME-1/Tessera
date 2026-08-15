@@ -177,12 +177,16 @@ h1,h2,h3{margin:0;font-weight:500;font-family:var(--heading)}
 .tip .t2{color:var(--tip-sub);display:block;font-family:var(--mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;margin-bottom:3px}
 
 /* переключатель направлений */
-.dirbar{position:fixed;right:18px;bottom:18px;z-index:60;display:flex;align-items:center;gap:9px;background:var(--panel);border:1px solid var(--line-2);border-radius:var(--r);padding:8px 10px;flex-wrap:wrap;max-width:calc(100vw - 36px)}
-.dirbar .lbl{margin-right:2px}
-.dirgroup{display:flex;gap:5px}
-.dirsep{width:1px;align-self:stretch;background:var(--line);margin:0 3px}
-.dirbar button{padding:6px 11px;font-size:12px;border:1px solid var(--line);border-radius:var(--r);color:var(--ink-2)}
-.dirbar button[aria-pressed="true"]{background:var(--ink);color:var(--panel);border-color:var(--ink)}
+/* Тема живёт в шапке тем же сегментом, что и период: три состояния, только
+   значки. Плавающая плашка в углу висела поверх содержимого и на телефоне
+   закрывала последнюю строку панели. */
+.seg-icons button{padding:0;width:34px;height:32px;display:grid;place-items:center}
+.seg-icons svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.4;
+  stroke-linecap:round;stroke-linejoin:round}
+.seg-icons svg .solid{fill:currentColor;stroke:none}
+/* Подсветка курсором достаётся только невыбранным: у выбранной фон и есть
+   --ink, и она гасила бы собственный значок. */
+.seg-icons button:not([aria-pressed="true"]):hover{color:var(--ink)}
 
 /* ======================= РАСТР: форма и плотность ======================= */
 [data-dir="b"]{
@@ -348,6 +352,17 @@ tr:hover .nm-edit button,.rrow:hover .nm-edit button,.nm-edit button:focus-visib
 @media (min-width:700px){ .sheet{align-items:center} }
 
 /* ── лента модерации ── */
+/* ---------- строка поиска ---------- */
+/* Заготовка search: поле ввода и кнопка в одну строку. Поле тянется, кнопка
+   держит ширину — иначе на узком экране она уезжает под ввод. */
+.search-row{display:flex;gap:8px;margin-bottom:14px}
+.search-row input{flex:1 1 auto;min-width:0;font:inherit;color:var(--ink);
+  background:var(--panel-2);border:1px solid var(--line);border-radius:var(--r);
+  padding:8px 12px}
+.search-row input::placeholder{color:var(--ink-3)}
+.search-row button{flex:0 0 auto}
+.table-wrap{overflow-x:auto}
+
 .shelf-filter{margin-bottom:14px;width:max-content;max-width:100%;overflow-x:auto}
 .shelf{display:grid;grid-template-columns:repeat(10,1fr);gap:6px}
 .shelf figure{margin:0;display:flex;flex-direction:column;gap:5px;min-width:0;cursor:zoom-in}

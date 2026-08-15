@@ -37,6 +37,12 @@
           "src": "appdb:new_day"
         },
         {
+          "type": "stat",
+          "title": "Файлов",
+          "span": 3,
+          "src": "appdb:files"
+        },
+        {
           "type": "funnel",
           "title": "Путь до пары",
           "span": 6,
@@ -110,31 +116,31 @@
     }
   ],
   "sql": {
-    "_комментарий": "Ядро эту секцию не читает: для него это лишнее поле манифеста. Запросы правятся под своё приложение, путь к базе тоже.",
+    "_комментарий": "Ядро эту секцию не читает: для него это лишнее поле манифеста. Запросы правятся под своё приложение. Баз две: запрос с префиксом pg: уходит в Postgres, остальные — в SQLite. Строку подключения к Postgres класть в \"pg\" (или в переменную окружения APPDB_PG_DSN, чтобы пароль не лежал в файле).",
     "db": "/opt/pocketbase/pb_data/data.db",
     "blocks": {
       "users_total": {
         "type": "stat",
         "sub": "зарегистрировано в приложении",
         "query": "SELECT count(*) FROM users",
-        "parts": "SELECT CASE WHEN platform IS NULL OR platform='' THEN 'неизвестно' ELSE platform END, count(*) FROM users GROUP BY 1 ORDER BY 2 DESC"
+        "parts": "SELECT case when platform = 'android' then 'Android' when platform = 'ios' then 'iPhone' when coalesce(apns_token,'') <> '' then 'iPhone' when coalesce(fcm_token,'') <> '' then 'Android' else 'платформа неизвестна' end AS плат, count(*) AS n FROM users GROUP BY 1 ORDER BY (плат = 'платформа неизвестна'), n DESC"
       },
       "pairs_alive": {
         "type": "stat",
         "sub": "групп, где сошлись двое",
-        "query": "SELECT count(*) FROM groups WHERE disbanded=0 AND json_valid(members) AND json_array_length(members)>=2"
+        "query": "pg:SELECT count(*) FROM groups WHERE NOT disbanded AND jsonb_array_length(members) >= 2"
       },
       "solo": {
         "type": "stat",
         "sub": "ждут второго",
-        "query": "SELECT count(*) FROM groups WHERE disbanded=0 AND json_valid(members) AND json_array_length(members)=1"
+        "query": "pg:SELECT count(*) FROM groups WHERE NOT disbanded AND jsonb_array_length(members) = 1"
       },
       "new_day": {
         "type": "stat",
         "sub": "новых аккаунтов за сутки",
         "query": "SELECT count(*) FROM users WHERE created > datetime('now','-1 day')",
         "delta": "SELECT count(*) FROM users WHERE created > datetime('now','-2 day') AND created <= datetime('now','-1 day')",
-        "parts": "SELECT CASE WHEN platform IS NULL OR platform='' THEN 'неизвестно' ELSE platform END, count(*) FROM users WHERE created > datetime('now','-1 day') GROUP BY 1 ORDER BY 2 DESC"
+        "parts": "SELECT case when platform = 'android' then 'Android' when platform = 'ios' then 'iPhone' when coalesce(apns_token,'') <> '' then 'iPhone' when coalesce(fcm_token,'') <> '' then 'Android' else 'платформа неизвестна' end AS плат, count(*) AS n FROM users WHERE created > datetime('now','-1 day') GROUP BY 1 ORDER BY (плат = 'платформа неизвестна'), n DESC"
       },
       "funnel": {
         "type": "funnel",
@@ -153,7 +159,7 @@
           },
           {
             "name": "Написали воспоминание",
-            "query": "SELECT count(DISTINCT author_uid) FROM memories WHERE deleted=0"
+            "query": "pg:SELECT count(DISTINCT author_uid) FROM memories WHERE NOT deleted"
           },
           {
             "name": "Купили Плюс",
@@ -164,7 +170,7 @@
       },
       "content": {
         "type": "list",
-        "query": "SELECT 'Воспоминания', count(*) FROM memories WHERE deleted=0 UNION ALL SELECT 'Сообщения', count(*) FROM chat_messages UNION ALL SELECT 'Файлы', count(*) FROM media UNION ALL SELECT 'Отметки настроения', count(*) FROM mood_entries"
+        "query": "pg:SELECT 'Воспоминания', count(*) FROM memories WHERE NOT deleted UNION ALL SELECT 'Сообщения', count(*) FROM chat_messages WHERE NOT deleted UNION ALL SELECT 'Штрихи рисунков', count(*) FROM canvas_strokes WHERE NOT deleted UNION ALL SELECT 'Отметки настроения', count(*) FROM mood_entries"
       },
       "regs_daily": {
         "type": "columns",
@@ -175,7 +181,7 @@
         "type": "raster",
         "unit": 1000,
         "unitLabel": "пар на кусочек",
-        "query": "SELECT 'Виджеты', count(DISTINCT group_id) FROM widget_data UNION ALL SELECT 'Настроения', count(DISTINCT group_id) FROM mood_entries UNION ALL SELECT 'Воспоминания', count(DISTINCT group_id) FROM memories WHERE deleted=0 UNION ALL SELECT 'Чат', count(DISTINCT group_id) FROM chat_messages"
+        "query": "pg:SELECT 'Виджеты', count(DISTINCT group_id) FROM widget_data UNION ALL SELECT 'Настроения', count(DISTINCT group_id) FROM mood_entries UNION ALL SELECT 'Рисование', count(DISTINCT group_id) FROM canvas_strokes UNION ALL SELECT 'Чат', count(DISTINCT group_id) FROM chat_messages UNION ALL SELECT 'Скучаю', count(DISTINCT group_id) FROM miss_you"
       },
       "coins": {
         "type": "stat",
@@ -201,9 +207,16 @@
       "pairs_life": {
         "type": "stat",
         "sub": "дней в среднем до расставания",
-        "query": "SELECT cast(avg(julianday(disbanded_at)-julianday(created_at)) AS int) FROM groups WHERE disbanded=1 AND disbanded_at IS NOT NULL AND disbanded_at!=''",
-        "parts": "SELECT 'распались всего', count(*) FROM groups WHERE disbanded=1"
+        "query": "pg:SELECT cast(avg(extract(epoch FROM (to_timestamp(disbanded_at, 'YYYY-MM-DD') - to_timestamp(created_at, 'YYYY-MM-DD'))) / 86400) AS int) FROM groups WHERE disbanded AND disbanded_at <> '' AND created_at <> ''",
+        "parts": "pg:SELECT 'распались всего', count(*) FROM groups WHERE disbanded"
+      },
+      "files": {
+        "type": "stat",
+        "sub": "файлов в медиатеке",
+        "query": "SELECT count(*) FROM media",
+        "parts": "SELECT kind, count(*) FROM media GROUP BY kind ORDER BY 2 DESC LIMIT 6"
       }
-    }
+    },
+    "pg": ""
   }
 }

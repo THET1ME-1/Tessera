@@ -86,6 +86,14 @@ func (a *API) layout(w http.ResponseWriter, r *http.Request) {
 	if err := a.s.DB().QueryRow(`SELECT blocks FROM layout WHERE tab=?`, tab).Scan(&raw); err != nil {
 		// Своей раскладки ещё нет — отдаём заводскую.
 		bs, ok := Default()[tab]
+		if ok && tab == "overview" {
+			// Плитки модулей кладём на обзор сразу, а не ждём, пока человек
+			// найдёт их в каталоге. Ядро считает людей по своим событиям —
+			// это те, кого видел SDK; сколько всего учёток заведено, знает
+			// только само приложение, и без его плитки главный экран отвечает
+			// не на тот вопрос.
+			bs = append(append([]blocks.Block{}, bs...), a.плиткиМодулей()...)
+		}
 		if !ok {
 			bs = a.вкладкаМодуля(tab)
 		}
@@ -103,6 +111,17 @@ func (a *API) layout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	отдать(w, map[string]any{"tab": tab, "blocks": bs})
+}
+
+// плиткиМодулей — то, что модули предлагают положить на обзор. Порядок как у
+// модулей: сперва база приложения, потом деньги, потом модерация.
+func (a *API) плиткиМодулей() []blocks.Block {
+	ms, _ := modules.Load(a.modulesDir)
+	out := []blocks.Block{}
+	for _, m := range ms {
+		out = append(out, m.Tiles...)
+	}
+	return out
 }
 
 func (a *API) вкладкаМодуля(tab string) []blocks.Block {

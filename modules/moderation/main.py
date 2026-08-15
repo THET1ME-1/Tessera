@@ -217,6 +217,91 @@ def миниатюра(параметры):
     ошибка(f"миниатюры нет и сделать не вышло: {id_}")
 
 
+# ── поиск пары ──────────────────────────────────────────────────────────────
+
+def postgres():
+    """Соединение с Postgres, где живут пары. Строка подключения — в
+    module.json (ключ "pg") или в переменной окружения MODERATION_PG_DSN,
+    чтобы пароль не лежал в файле."""
+    ист, _ = настройки()
+    dsn = ист.get("pg") or os.environ.get("MODERATION_PG_DSN", "")
+    if not dsn:
+        ошибка('нет строки подключения к Postgres: добавьте "pg" в module.json')
+    import psycopg2                                  # noqa: PLC0415
+    conn = psycopg2.connect(dsn)
+    conn.set_session(readonly=True)
+    return conn
+
+
+def поиск_пары(параметры):
+    """Найти пару по огрызку id, имени участника или почте.
+
+    Полный id никто не помнит: у мигрированных пар он двадцать символов, у
+    новых пятнадцать. Поэтому ищем по подстроке id, по именам участников
+    (карта лежит в самой записи пары) и по людям — почта и имя, — а от них
+    переходим к их парам.
+
+    Пары читаются из Postgres, люди — из SQLite PocketBase: там они и живут.
+    """
+    ист, _ = настройки()
+    запрос = str(параметры.get("q", "")).strip()
+    if len(запрос) < 3:
+        return {"cols": ["пара", "участники", "статус", "воспоминаний",
+                         "сообщений", "заведена"], "rows": []}
+
+    # 1) кандидаты среди людей — по почте и имени
+    свои = []
+    conn = база(ист.get("db", ""))
+    try:
+        строки = conn.execute(
+            "SELECT id, coalesce(display_name,''), coalesce(email,'') FROM users "
+            "WHERE lower(email) LIKE ? OR lower(coalesce(display_name,'')) LIKE ? "
+            "LIMIT 40", (f"%{запрос.lower()}%", f"%{запрос.lower()}%")).fetchall()
+        свои = [(r[0], r[1] or r[2]) for r in строки]
+    finally:
+        conn.close()
+    имена = {uid: подпись for uid, подпись in свои}
+
+    pg = postgres()
+    try:
+        with pg.cursor() as cur:
+            cur.execute("SET LOCAL statement_timeout = 8000")
+            условия = ["id ILIKE %s", "member_names::text ILIKE %s"]
+            значения = [f"%{запрос}%", f"%{запрос}%"]
+            if имена:
+                условия.append("members ?| %s")
+                значения.append(list(имена))
+            cur.execute(
+                "SELECT id, members::text, member_names::text, disbanded, "
+                "coalesce(memories_count,0), coalesce(messages_count,0), "
+                "coalesce(created_at,''), coalesce(disbanded_at,'') "
+                "FROM groups WHERE " + " OR ".join(условия) +
+                " ORDER BY disbanded ASC, updated DESC LIMIT 25", значения)
+            найдено = cur.fetchall()
+    finally:
+        pg.close()
+
+    ряды = []
+    for gid, состав, подписи, распалась, воспоминаний, сообщений, когда, распалась_когда in найдено:
+        try:
+            участники = json.loads(состав or "[]") or []
+        except ValueError:
+            участники = []
+        try:
+            карта = json.loads(подписи or "{}") or {}
+        except ValueError:
+            карта = {}
+        кто = ", ".join(
+            str(карта.get(u) or имена.get(u) or u)[:24] for u in участники) or "—"
+        ряды.append([
+            gid, кто,
+            "распалась " + (распалась_когда[:10] if распалась_когда else "") if распалась else "живая",
+            int(воспоминаний), int(сообщений), (когда or "")[:10],
+        ])
+    return {"cols": ["пара", "участники", "статус", "воспоминаний",
+                     "сообщений", "заведена"], "rows": ряды}
+
+
 def main():
     команда = sys.argv[1] if len(sys.argv) > 1 else "collect"
     if команда == "collect":
@@ -230,6 +315,8 @@ def main():
 
     if ключ == "shelf" or ключ == "list":
         print(json.dumps(лента(параметры), ensure_ascii=False))
+    elif ключ == "pairs":
+        print(json.dumps(поиск_пары(параметры), ensure_ascii=False))
     elif ключ == "thumb":
         print(json.dumps(миниатюра(параметры), ensure_ascii=False))
     else:

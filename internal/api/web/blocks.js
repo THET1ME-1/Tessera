@@ -310,12 +310,64 @@ function пусто(host, текст) {
   host.innerHTML = '<p class="block-empty">' + текст + "</p>";
 }
 
+/* ── search: найти по запросу ─────────────────────────────────────────────
+ *
+ * Вторая заготовка, которая ходит на сервер сама: заранее собрать ответы на
+ * все возможные запросы нельзя. Поле ввода, кнопка, таблица ответов. Пустой
+ * запрос ничего не ищет — иначе первый же заход вываливал бы всю базу.
+ *
+ * Модуль получает запрос параметром `q` и отвечает теми же полями, что
+ * обычная таблица: cols и rows. */
+function блокSearch(host, d, блок) {
+  const src = (блок && блок.src) || "";
+  const было = host.dataset.q || "";
+  const подпись = (блок && блок.placeholder) || "id, имя или почта";
+
+  const строка = '<form class="search-row" role="search">' +
+    '<input type="search" name="q" value="' + было.replace(/"/g, "&quot;") +
+      '" placeholder="' + подпись + '" aria-label="' + подпись + '" autocomplete="off">' +
+    '<button class="ghost-btn" type="submit">Найти</button></form>';
+
+  let ответ;
+  if (!было) {
+    ответ = '<p class="block-empty">введите запрос</p>';
+  } else if (!d || !(d.rows || []).length) {
+    ответ = '<p class="block-empty">ничего не нашлось</p>';
+  } else {
+    const шапка = (d.cols || []).map(c => "<th>" + c + "</th>").join("");
+    const тело = (d.rows || []).map(r =>
+      "<tr>" + r.map(v => "<td>" + (v === null || v === undefined ? "—" : v) + "</td>").join("") + "</tr>"
+    ).join("");
+    ответ = '<div class="table-wrap"><table><thead><tr>' + шапка +
+      "</tr></thead><tbody>" + тело + "</tbody></table></div>" +
+      '<p class="block-note">найдено ' + (d.rows || []).length + "</p>";
+  }
+
+  host.innerHTML = строка + ответ;
+
+  const форма = host.querySelector("form");
+  форма.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const q = (форма.querySelector("input").value || "").trim();
+    host.dataset.q = q;
+    if (!q) return блокSearch(host, null, блок);
+    host.innerHTML = '<p class="block-empty">Ищу…</p>';
+    const ссылка = адрес("/api/query") + "?src=" + encodeURIComponent(src) +
+      "&q=" + encodeURIComponent(q);
+    try {
+      блокSearch(host, await взять(ссылка), блок);
+    } catch (err) {
+      пусто(host, "поиск не ответил: " + err.message);
+    }
+  });
+}
+
 /* Кто какую заготовку рисует. Незнакомый тип — не повод падать: панель может
    быть старее модуля, который просит невиданный блок. */
 const ЗАГОТОВКИ = {
   stat: блокStat, columns: блокColumns, raster: блокRaster, table: блокTable,
   list: блокList, funnel: блокFunnel, heat: блокHeat, note: блокNote, map: блокMap,
-  shelf: блокShelf,
+  shelf: блокShelf, search: блокSearch,
 };
 
 function нарисовать(host, тип, данные, блок) {

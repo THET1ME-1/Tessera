@@ -14,6 +14,13 @@
       "title": "Модерация",
       "blocks": [
         {
+          "type": "search",
+          "title": "Найти пару",
+          "span": 12,
+          "src": "moderation:pairs",
+          "placeholder": "id пары, имя участника или почта"
+        },
+        {
           "type": "stat",
           "title": "Файлов в хранилище",
           "span": 4,
@@ -53,6 +60,7 @@
     "thumb": "/opt/pocketbase/pb_data/thumb_cache/{id}_{w}.webp",
     "make": [
       "/opt/pocketbase/tools/thumb_cache.py"
-    ]
+    ],
+    "pg": ""
   }
 }

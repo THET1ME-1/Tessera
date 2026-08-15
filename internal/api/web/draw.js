@@ -55,17 +55,36 @@ function columns(host, items, opt) {
 
   items.forEach((it, i) => {
     const cx = slot * i + slot / 2;
-    let y = 4 + plotH;
-    it.parts.forEach(p => {
-      const hgt = (p.v / max) * plotH;
-      if (hgt <= 0) return;
-      y -= hgt;
+    const x = cx - bw / 2;
+    const низ0 = 4 + plotH;
+    // Стопка — одно тело, стоящее на оси: зазор в два пикселя разводит соседние
+    // столбики, а не серии внутри столбика. В тихий день столбик высотой в
+    // десяток пикселей от такого зазора разваливался на висящие полоски.
+    const части = it.parts.filter(p => p.v > 0);
+    let низ = низ0, предыдущая = 0;
+    const границы = [];
+    части.forEach((p, k) => {
+      const hgt = Math.max(1, (p.v / max) * plotH);
+      const верх = низ - hgt;
       const fill = (style === "hatch" && p.hatch) ? "url(#hatch)" : p.color;
-      const hh = Math.max(1, hgt - 2);
-      svg.appendChild(el("rect", { x: cx - bw / 2, y: y + 1, width: bw, height: hh,
-                                   rx: Math.min(radius, hh / 2), fill, opacity: it.muted ? .4 : 1 }));
-      y -= 2;
+      const r = Math.min(radius, bw / 2, hgt);
+      // Скругление достаётся только вершине стопки: низ примыкает к оси.
+      const d = (k === части.length - 1)
+        ? "M" + x + " " + низ + "V" + (верх + r) +
+          "a" + r + " " + r + " 0 0 1 " + r + " " + -r +
+          "h" + (bw - 2 * r) +
+          "a" + r + " " + r + " 0 0 1 " + r + " " + r +
+          "V" + низ + "Z"
+        : "M" + x + " " + низ + "V" + верх + "h" + bw + "V" + низ + "Z";
+      svg.appendChild(el("path", { d, fill, opacity: it.muted ? .4 : 1 }));
+      // Разрез между сериями рисуем, только когда обе части и без него видны:
+      // на низком столбике он съел бы половину высоты.
+      if (k > 0 && hgt >= 5 && предыдущая >= 5) границы.push(низ);
+      предыдущая = hgt;
+      низ = верх;
     });
+    границы.forEach(y =>
+      svg.appendChild(el("rect", { x, y: y - 1, width: bw, height: 1.5, fill: "var(--panel)" })));
     if (opt.axis !== false && it.tick) {
       const t = el("text", { x: cx, y: H - 6, "text-anchor": "middle" });
       t.textContent = it.tick; svg.appendChild(t);

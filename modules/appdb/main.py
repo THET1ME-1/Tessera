@@ -13,9 +13,16 @@
 Что именно считать, описано в module.json, в секции "sql". Ядро эту секцию не
 читает и не понимает — для него это лишнее поле манифеста.
 
+**Баз может быть две.** Приложение переезжает по частям: горячие таблицы уже
+живут в Postgres, а учётки и файлы остались в SQLite. Поэтому запрос с
+префиксом `pg:` уходит в Postgres, остальные — в SQLite, и один блок панели
+свободно собирается из обеих баз. Postgres подключается лениво: нет таких
+запросов — нет и соединения.
+
 Три правила, ради которых модуль написан именно так:
 
-* база открывается ТОЛЬКО на чтение (`mode=ro` и `PRAGMA query_only`);
+* базы открываются ТОЛЬКО на чтение (`mode=ro` и `PRAGMA query_only` у SQLite,
+  транзакция только для чтения у Postgres);
 * у каждого запроса свой предел по времени, иначе один тяжёлый JOIN подвесит
   живую базу приложения, а вместе с ней и само приложение;
 * упавший запрос не роняет остальные: блок останется без данных, панель
@@ -31,6 +38,7 @@ import time
 ЗДЕСЬ = os.path.dirname(os.path.abspath(__file__))
 ПРЕДЕЛ_СЕКУНД = 8.0          # на один запрос
 ПРЕДЕЛ_СБОРА = 50.0          # на весь сбор: у ядра таймаут шестьдесят
+ПРЕФИКС_PG = "pg:"
 
 
 def настройки():
@@ -61,67 +69,145 @@ def сторож(conn, срок):
     conn.set_progress_handler(проверка, 10_000)
 
 
-def строки(conn, запрос, срок=ПРЕДЕЛ_СЕКУНД):
-    сторож(conn, срок)
-    try:
-        return conn.execute(запрос).fetchall()
-    finally:
-        conn.set_progress_handler(None, 0)
+class Postgres:
+    """Второе хранилище. Драйвер берём тот, что найдётся в системе.
+
+    Соединение открывается при первом `pg:`-запросе: установки, где всё ещё
+    живёт в SQLite, ничего лишнего не поднимают.
+    """
+
+    def __init__(self, dsn: str):
+        self.dsn = dsn
+        self._conn = None
+        self._вид = ""
+
+    def _подключиться(self):
+        if self._conn is not None:
+            return
+        if not self.dsn:
+            raise RuntimeError(
+                'запрос с префиксом "pg:" есть, а строки подключения нет: '
+                'добавьте "pg" в секцию "sql" файла module.json')
+        try:
+            import psycopg2                        # noqa: PLC0415
+            self._conn = psycopg2.connect(self.dsn)
+            self._conn.set_session(readonly=True)
+            self._вид = "psycopg2"
+            return
+        except ImportError:
+            pass
+        try:
+            import asyncio                          # noqa: PLC0415
+            import asyncpg                          # noqa: PLC0415
+        except ImportError as e:
+            raise RuntimeError(
+                "для Postgres нужен psycopg2 или asyncpg — не нашёлся ни один "
+                f"({e})") from e
+        self._asyncio, self._asyncpg = asyncio, asyncpg
+        self._вид = "asyncpg"
+        self._conn = "ленивое"                      # соединение на каждый запрос
+
+    def строки(self, запрос: str, срок: float):
+        self._подключиться()
+        if self._вид == "psycopg2":
+            with self._conn.cursor() as cur:
+                cur.execute(f"SET LOCAL statement_timeout = {int(срок * 1000)}")
+                cur.execute(запрос)
+                return cur.fetchall()
+
+        async def _прогон():
+            conn = await self._asyncpg.connect(self.dsn, timeout=срок)
+            try:
+                # Только чтение и жёсткий предел по времени: тяжёлый скан не
+                # должен занимать живую базу приложения дольше своего срока.
+                await conn.execute(
+                    f"SET statement_timeout = {int(срок * 1000)}")
+                строки = await conn.fetch(запрос)
+                return [tuple(r) for r in строки]
+            finally:
+                await conn.close()
+
+        return self._asyncio.run(_прогон())
+
+    def закрыть(self):
+        if self._вид == "psycopg2" and self._conn not in (None, "ленивое"):
+            self._conn.close()
 
 
-def одно(conn, запрос, срок=ПРЕДЕЛ_СЕКУНД):
-    r = строки(conn, запрос, срок)
-    return r[0][0] if r and r[0] else 0
+class Базы:
+    """Две базы под одной крышей: `pg:`-запрос уходит в Postgres, прочий — в SQLite."""
+
+    def __init__(self, путь_sqlite: str, dsn: str):
+        self.lite = открыть(путь_sqlite)
+        self.pg = Postgres(dsn)
+
+    def строки(self, запрос: str, срок: float = ПРЕДЕЛ_СЕКУНД):
+        if запрос.startswith(ПРЕФИКС_PG):
+            return self.pg.строки(запрос[len(ПРЕФИКС_PG):].strip(), срок)
+        сторож(self.lite, срок)
+        try:
+            return self.lite.execute(запрос).fetchall()
+        finally:
+            self.lite.set_progress_handler(None, 0)
+
+    def одно(self, запрос: str, срок: float = ПРЕДЕЛ_СЕКУНД):
+        r = self.строки(запрос, срок)
+        return r[0][0] if r and r[0] else 0
+
+    def закрыть(self):
+        self.lite.close()
+        self.pg.закрыть()
 
 
 # ── сборка блоков ───────────────────────────────────────────────────────────
 
-def плитка(conn, оп):
-    d = {"value": одно(conn, оп["query"]), "sub": оп.get("sub", "")}
+def плитка(б, оп):
+    d = {"value": б.одно(оп["query"]), "sub": оп.get("sub", "")}
     if "parts" in оп:
-        d["parts"] = [{"name": str(n), "value": v} for n, v in строки(conn, оп["parts"])]
+        d["parts"] = [{"name": str(n), "value": v} for n, v in б.строки(оп["parts"])]
     if "delta" in оп:
-        было = одно(conn, оп["delta"])
+        было = б.одно(оп["delta"])
         if было:
             d["delta"] = (d["value"] - было) / было * 100
     return d
 
 
-def таблица(conn, оп):
+def таблица(б, оп):
     return {
         "cols": оп["cols"],
-        "rows": [list(r) for r in строки(conn, оп["query"])],
+        "rows": [list(r) for r in б.строки(оп["query"])],
         "barCol": оп.get("barCol", 1),
     }
 
 
-def растр(conn, оп):
+def растр(б, оп):
     return {
-        "rows": [{"name": str(n), "value": v} for n, v in строки(conn, оп["query"])],
+        "rows": [{"name": str(n), "value": v} for n, v in б.строки(оп["query"])],
         "unit": оп.get("unit", 1),
         "unitLabel": оп.get("unitLabel", ""),
     }
 
 
-def список(conn, оп):
-    return {"items": [{"name": str(n), "value": v} for n, v in строки(conn, оп["query"])]}
+def список(б, оп):
+    return {"items": [{"name": str(n), "value": v} for n, v in б.строки(оп["query"])]}
 
 
-def воронка(conn, оп):
+def воронка(б, оп):
     шаги = []
     for ш in оп["steps"]:
-        шаги.append({"name": ш["name"], "value": одно(conn, ш["query"]), "note": ш.get("note", "")})
+        шаги.append({"name": ш["name"], "value": б.одно(ш["query"]),
+                     "note": ш.get("note", "")})
     return {"steps": шаги}
 
 
-def столбики(conn, оп):
-    items = [{"label": str(l), "parts": [{"v": v}]} for l, v in строки(conn, оп["query"])]
+def столбики(б, оп):
+    items = [{"label": str(l), "parts": [{"v": v}]} for l, v in б.строки(оп["query"])]
     return {"items": items, "unit": оп.get("unit", "")}
 
 
-def матрица(conn, оп):
+def матрица(б, оп):
     """Когорты: первая колонка — подпись ряда, остальные — значения."""
-    данные = строки(conn, оп["query"])
+    данные = б.строки(оп["query"])
     return {
         "rowLabels": [str(r[0]) for r in данные],
         "colLabels": оп["cols"],
@@ -147,7 +233,9 @@ def собрать(ключи=None):
 
     итог = {}
     начало = time.monotonic()
-    conn = открыть(путь)
+    # Пустое значение в манифесте не должно перекрывать окружение:
+    # строку с паролем держат как раз в переменной, а не в файле.
+    базы = Базы(путь, оп.get("pg") or os.environ.get("APPDB_PG_DSN", ""))
     try:
         for ключ, описание in блоки.items():
             if time.monotonic() - начало > ПРЕДЕЛ_СБОРА:
@@ -162,13 +250,13 @@ def собрать(ключи=None):
                 print(f"{ключ}: неизвестный тип блока {описание.get('type')!r}", file=sys.stderr)
                 continue
             try:
-                итог[ключ] = сборщик(conn, описание)
-            except sqlite3.OperationalError as e:
-                # Прерванный сторожем запрос приходит сюда же. Один тяжёлый
-                # блок не должен уносить с собой остальные.
+                итог[ключ] = сборщик(базы, описание)
+            except Exception as e:      # noqa: BLE001 — блок не роняет остальные
+                # Прерванный сторожем запрос приходит сюда же, как и отказ
+                # Postgres: один тяжёлый блок не должен уносить с собой прочие.
                 print(f"{ключ}: {e}", file=sys.stderr)
     finally:
-        conn.close()
+        базы.закрыть()
     return итог
 
 
