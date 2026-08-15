@@ -35,6 +35,12 @@ type Manifest struct {
 	Root  string         `json:"root"`
 	Tabs  []Tab          `json:"tabs"`
 	Tiles []blocks.Block `json:"tiles"` // что предлагает положить на обзор
+	// Provides — величины, которые модуль считает лучше ядра, и ядро берёт их
+	// у него. Пока такая одна: `people_total` — сколько всего учёток заведено
+	// в приложении. Ядро своими силами столько не знает: оно видит только тех,
+	// кто заходил, пока живут события, — на Togetherly это 35 тысяч из 72.
+	// Ключ — имя величины, значение — ключ блока модуля: {"people_total":"users_total"}.
+	Provides map[string]string `json:"provides"`
 }
 
 // Load читает все папки внутри dir.

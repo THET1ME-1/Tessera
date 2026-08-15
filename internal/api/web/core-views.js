@@ -28,7 +28,15 @@ function viewOverview() {
   const prevWeek = dd.slice(-14, -7).reduce((s, d) => s + d[key], 0);
   const growth = prevWeek ? (week - prevWeek) / prevWeek * 100 : 0;
   const android = DATA.platforms[0], ios = DATA.platforms[1];
-  const heroV = state.людиСчитаются ? DATA.totals.people : DATA.totals.events;
+  // Крупная цифра — сколько всего учёток в приложении, если оно само это
+  // сказало (модуль объявляет `people_total`). Ядро своими силами столько не
+  // знает: события живут две недели, и человек, не заходивший дольше, из
+  // счёта выпадает — на Togetherly это 36 тысяч из 72. Пока такого числа нет,
+  // показываем прежнее: уникальных за период.
+  const учёток = DATA.totals.accounts;
+  const heroV = state.людиСчитаются
+    ? (учёток || DATA.totals.people)
+    : DATA.totals.events;
 
   const html =
     '<div class="grid">' +
@@ -41,7 +49,10 @@ function viewOverview() {
           '<span class="delta' + (growth < 0 ? " down" : "") + '">' + (growth >= 0 ? "↑ " : "↓ ") +
             Math.abs(growth).toFixed(0) + "% " + (state.людиСчитаются ? "новых" : "событий") + " к прошлой неделе</span>" +
           '<span class="hero-note">' + (state.людиСчитаются
-            ? "Уникальные люди за 15 дней. Хеш считает сервер, соли приложение не знает."
+            ? (учёток
+                ? "Учёток в приложении. На графике — " + fmt(DATA.totals.people) +
+                  " заходивших за период; хеш считает сервер, соли приложение не знает."
+                : "Уникальные люди за 15 дней. Хеш считает сервер, соли приложение не знает.")
             : "События за 15 дней. Людей не считаем: в базе одни счётчики.") + "</span>" +
         "</div>" +
       "</div>" +

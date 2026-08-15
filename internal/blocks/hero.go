@@ -1,11 +1,40 @@
 package blocks
 
 import (
+	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/THET1ME-1/Tessera/internal/store"
 )
+
+// ИзМодуля достаёт величину, которую модуль считает лучше ядра. Объявление
+// модуль делает в манифесте (поле provides), ядро кладёт его в настройки при
+// сборе — читать сами манифесты отсюда нельзя, пакет модулей импортирует этот.
+func ИзМодуля(s *store.Store, величина string) (float64, bool) {
+	var адрес string
+	if err := s.DB().QueryRow(`SELECT v FROM settings WHERE k=?`,
+		"provides."+величина).Scan(&адрес); err != nil || адрес == "" {
+		return 0, false
+	}
+	части := strings.SplitN(адрес, ":", 2)
+	if len(части) != 2 {
+		return 0, false
+	}
+	var raw string
+	if err := s.DB().QueryRow(`SELECT json FROM module_data WHERE module=? AND key=?`,
+		части[0], части[1]).Scan(&raw); err != nil {
+		return 0, false
+	}
+	var d struct {
+		Value float64 `json:"value"`
+	}
+	if err := json.Unmarshal([]byte(raw), &d); err != nil || d.Value == 0 {
+		return 0, false
+	}
+	return d.Value, true
+}
 
 // Герой и его спутники — блоки, задающие вид обзора.
 //
@@ -68,6 +97,16 @@ func Герой(s *store.Store) map[string]Source {
 			out.Value = людей
 			out.Sub = "Уникальные люди за период. Хеш считает сервер, соли приложение не знает."
 			out.Note = "Последний день неполный: сутки ещё идут."
+
+			// Ядро видит только тех, кто заходил, пока живут события: на
+			// Togetherly это 35 тысяч человек из 72 заведённых. Крупная цифра
+			// с подписью «всего людей» так вводила в заблуждение. Если модуль
+			// объявил, что знает настоящее число учёток, берём его — а график
+			// остаётся про тех, кто заходил.
+			if всего, есть := ИзМодуля(s, "people_total"); есть {
+				out.Value = всего
+				out.Sub = "Учёток в приложении. На графике — кто заходил за период."
+			}
 			if прошлаяНеделя > 0 {
 				д := (всегоНовых - прошлаяНеделя) / прошлаяНеделя * 100
 				out.Delta = &д

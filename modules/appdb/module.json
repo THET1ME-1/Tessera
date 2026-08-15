@@ -242,5 +242,8 @@
       }
     },
     "pg": ""
+  },
+  "provides": {
+    "people_total": "users_total"
   }
 }

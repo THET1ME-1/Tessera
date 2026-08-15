@@ -221,8 +221,9 @@ function блокMap(host, d) {
  * подставляется в /api/query, оттуда же берутся фильтры и число страниц. */
 function блокShelf(host, d, блок) {
   const src = (блок && блок.src) || "";
-  const вид = host.dataset.kind || "";
-  const стр = Number(host.dataset.page || 0);
+  const моё = память(src);
+  const вид = моё.kind || "";
+  const стр = Number(моё.page || 0);
 
   const items = d.items || [];
   const виды = d.kinds || [];
@@ -234,7 +235,10 @@ function блокShelf(host, d, блок) {
 
   const кадры = items.map((it, i) =>
     '<figure data-i="' + i + '"><div class="ph' + (it.video ? " vid" : "") + '">' +
-      '<img loading="lazy" src="' + it.url + '" alt="' + (it.caption || "кадр") + '"' +
+      // Адрес обязательно через адрес(): модуль отдаёт путь от корня панели,
+      // а панель живёт в подпапке (/tessera/). Без этого браузер уходил на
+      // корень домена и получал пустоту — лента стояла без единого кадра.
+      '<img loading="lazy" src="' + адрес(it.url) + '" alt="' + (it.caption || "кадр") + '"' +
       ' onerror="this.closest(&quot;.ph&quot;).classList.add(&quot;нет&quot;)">' +
     "</div><figcaption>" + (it.caption || "") + "</figcaption></figure>").join("");
 
@@ -255,7 +259,8 @@ function блокShelf(host, d, блок) {
   const перерисовать = async () => {
     host.innerHTML = '<p class="block-empty">Загружаю ленту…</p>';
     const ссылка = адрес("/api/query") + "?src=" + encodeURIComponent(src) +
-      "&page=" + host.dataset.page + (host.dataset.kind ? "&kind=" + encodeURIComponent(host.dataset.kind) : "");
+      "&page=" + (моё.page || 0) +
+      (моё.kind ? "&kind=" + encodeURIComponent(моё.kind) : "");
     try {
       блокShelf(host, await взять(ссылка), блок);
     } catch (e) {
@@ -264,13 +269,13 @@ function блокShelf(host, d, блок) {
   };
 
   host.querySelectorAll("[data-kind]").forEach(b => b.addEventListener("click", () => {
-    host.dataset.kind = b.dataset.kind;
-    host.dataset.page = "0";
+    моё.kind = b.dataset.kind;
+    моё.page = 0;
     перерисовать();
   }));
   host.querySelectorAll("[data-page]").forEach(b => b.addEventListener("click", () => {
     if (b.disabled) return;
-    host.dataset.page = b.dataset.page;
+    моё.page = Number(b.dataset.page);
     перерисовать();
   }));
 
@@ -320,7 +325,9 @@ function пусто(host, текст) {
  * обычная таблица: cols и rows. */
 function блокSearch(host, d, блок) {
   const src = (блок && блок.src) || "";
-  const было = host.dataset.q || "";
+  const моё = память(src);
+  const было = моё.q || "";
+  if (d === null && моё.ответ) d = моё.ответ;   // вернулись на вкладку — показываем найденное
   const подпись = (блок && блок.placeholder) || "id, имя или почта";
 
   const строка = '<form class="search-row" role="search">' +
@@ -349,13 +356,15 @@ function блокSearch(host, d, блок) {
   форма.addEventListener("submit", async (e) => {
     e.preventDefault();
     const q = (форма.querySelector("input").value || "").trim();
-    host.dataset.q = q;
+    моё.q = q;
+    моё.ответ = null;
     if (!q) return блокSearch(host, null, блок);
     host.innerHTML = '<p class="block-empty">Ищу…</p>';
     const ссылка = адрес("/api/query") + "?src=" + encodeURIComponent(src) +
       "&q=" + encodeURIComponent(q);
     try {
-      блокSearch(host, await взять(ссылка), блок);
+      моё.ответ = await взять(ссылка);
+      блокSearch(host, моё.ответ, блок);
     } catch (err) {
       пусто(host, "поиск не ответил: " + err.message);
     }

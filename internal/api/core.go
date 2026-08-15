@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"sync"
 	"time"
+
+	"github.com/THET1ME-1/Tessera/internal/blocks"
 )
 
 // Готовый ответ живёт полминуты: сводки пересчитываются раз в минуту, а панель
@@ -112,10 +114,19 @@ func (a *API) итоги(app, from, to string) (any, error) {
 	a.s.DB().QueryRow(`SELECT count(DISTINCT day) FROM daily WHERE app=? AND day BETWEEN ? AND ?`,
 		app, from, to).Scan(&дней)
 
-	return map[string]any{
+	итог := map[string]any{
 		"events": события, "people": людей, "dau": заСутки, "days": дней,
 		"screens": экранов, "first": from, "last": to,
-	}, nil
+	}
+	// Ядро знает только тех, кого видело: события живут две недели, хеши три
+	// месяца, и человек, не заходивший дольше, отсюда выпадает. Сколько всего
+	// учёток заведено, знает само приложение — если его модуль это объявил,
+	// отдаём и такое число, чтобы крупная цифра обзора отвечала на вопрос
+	// «сколько нас», а не «скольких видел SDK».
+	if всего, есть := blocks.ИзМодуля(a.s, "people_total"); есть {
+		итог["accounts"] = всего
+	}
+	return итог, nil
 }
 
 // дни — по одной строке на сутки: события, люди, новые, вернувшиеся, экраны.

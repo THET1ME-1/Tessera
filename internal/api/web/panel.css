@@ -58,7 +58,7 @@ table{border-collapse:collapse;width:100%}
 
 /* ---------- общая типографика ---------- */
 .mono{font-family:var(--mono);font-weight:400}
-.lbl{font-family:var(--mono);font-weight:400;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3)}
+.lbl{font-family:var(--mono);font-weight:400;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
 .num{font-variant-numeric:tabular-nums}
 h1,h2,h3{margin:0;font-weight:500;font-family:var(--heading)}
 
@@ -129,13 +129,13 @@ h1,h2,h3{margin:0;font-weight:500;font-family:var(--heading)}
 .lg{display:inline-flex;align-items:center;gap:7px;font-size:11.5px;color:var(--ink-2)}
 .lg i{width:9px;height:9px;border-radius:2px;flex:none}
 .chart{width:100%;display:block;overflow:visible}
-.chart text{font-family:var(--mono);font-size:9.5px;fill:var(--ink-3);letter-spacing:.06em}
+.chart text{font-family:var(--mono);font-size:11px;fill:var(--ink-3);letter-spacing:.06em}
 .chart .axis{stroke:var(--line);stroke-width:1}
 .chart .grid-l{stroke:var(--line);stroke-width:1}
 
 /* таблицы */
 .tbl{font-size:13px}
-.tbl th{text-align:left;font-family:var(--mono);font-weight:400;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);padding:0 12px 9px;border-bottom:1px solid var(--line)}
+.tbl th{text-align:left;font-family:var(--mono);font-weight:400;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);padding:0 12px 9px;border-bottom:1px solid var(--line)}
 .tbl th.r,.tbl td.r{text-align:right}
 .tbl td{padding:9px 12px;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums;vertical-align:middle}
 .tbl tr:last-child td{border-bottom:none}
@@ -147,7 +147,7 @@ h1,h2,h3{margin:0;font-weight:500;font-family:var(--heading)}
 /* матрица удержания */
 .mx{font-size:12px}
 .mx td,.mx th{padding:7px 9px;text-align:center;font-variant-numeric:tabular-nums}
-.mx th{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);font-weight:400}
+.mx th{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);font-weight:400}
 .mx td.k{text-align:left;font-family:var(--mono);font-size:11px;color:var(--ink-2);white-space:nowrap}
 .mx .cell{border-radius:var(--r);display:inline-block;padding:6px 0;width:100%;max-width:74px;text-align:center}
 .mx td:not(.k){padding:4px 3px}
@@ -174,7 +174,7 @@ h1,h2,h3{margin:0;font-weight:500;font-family:var(--heading)}
 /* тултип */
 .tip{position:fixed;z-index:50;background:var(--tip-bg);color:var(--tip-ink);border-radius:3px;padding:7px 10px;font-size:11.5px;pointer-events:none;opacity:0;transition:opacity .1s;font-variant-numeric:tabular-nums;white-space:nowrap}
 .tip b{font-weight:500}
-.tip .t2{color:var(--tip-sub);display:block;font-family:var(--mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;margin-bottom:3px}
+.tip .t2{color:var(--tip-sub);display:block;font-family:var(--mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;margin-bottom:3px}
 
 /* переключатель направлений */
 /* Тема живёт в шапке тем же сегментом, что и период: три состояния, только
@@ -226,8 +226,8 @@ h1,h2,h3{margin:0;font-weight:500;font-family:var(--heading)}
 .shelf figure{margin:0;display:flex;flex-direction:column;gap:5px;min-width:0}
 .shelf .ph{aspect-ratio:1;border-radius:var(--r);background:var(--panel-2);position:relative;overflow:hidden}
 .shelf .ph svg{position:absolute;inset:0;width:100%;height:100%}
-.shelf figcaption{font-family:var(--mono);font-size:9.5px;letter-spacing:.05em;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.shelf .vid::after{content:"видео";position:absolute;left:6px;bottom:5px;font-family:var(--mono);font-size:8.5px;letter-spacing:.08em;color:var(--ink-2)}
+.shelf figcaption{font-family:var(--mono);font-size:11px;letter-spacing:.05em;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.shelf .vid::after{content:"видео";position:absolute;left:6px;bottom:5px;font-family:var(--mono);font-size:10px;letter-spacing:.08em;color:var(--ink-2)}
 @media (max-width:1080px){ .tiles.six{grid-template-columns:repeat(3,1fr)} .shelf{grid-template-columns:repeat(4,1fr)} }
 /* длинная подпись заголовка на телефоне переносится, а не тянет страницу вбок */
 @media (max-width:680px){
@@ -253,7 +253,7 @@ h1,h2,h3{margin:0;font-weight:500;font-family:var(--heading)}
 .map-wrap{position:relative}
 .map-note{display:flex;gap:18px;flex-wrap:wrap;font-family:var(--mono);font-size:10px;letter-spacing:.1em;
   text-transform:uppercase;color:var(--ink-3);margin-top:12px}
-.chart .quad{fill:var(--ink-3);font-size:9px;letter-spacing:.1em;text-transform:uppercase;opacity:.75}
+.chart .quad{fill:var(--ink-3);font-size:11px;letter-spacing:.1em;text-transform:uppercase;opacity:.75}
 .chart .dotlbl{fill:var(--ink-2);font-family:var(--sans);font-size:11px;letter-spacing:0;text-transform:none}
 .chart .med{stroke:var(--line-2);stroke-width:1;stroke-dasharray:3 4}
 /* растровые строки: один кусочек — фиксированная величина, читается счётом */
@@ -291,10 +291,71 @@ tr:hover .nm-edit button,.rrow:hover .nm-edit button,.nm-edit button:focus-visib
   .seg{order:3}
   .who{order:4;margin-left:auto}
 }
+/* ---------- телефон ---------- */
+/* Правило одно: до первой цифры человек не должен листать. На 390×844 шапка
+   вместе со строкой сведений занимала 500 пикселей из 844 — шесть десятых
+   экрана уходило на служебное, и «Всего людей» приходилось искать прокруткой.
+   Поэтому здесь не «всё в один столбец», а разбор по весу: числа встают
+   парами, читается это так же, а высота вдвое меньше; графики и таблицы
+   остаются во всю ширину, им теснота вредит. */
 @media (max-width:680px){
+  .wrap{padding:12px 12px 72px}
+
+  /* Шапка: имя панели прячем — значок узнаётся и без подписи; период и тема
+     уезжают во вторую строку с прокруткой вбок, чтобы не переносились. */
+  .topbar{gap:8px;margin-bottom:12px}
+  .brand{font-size:0;gap:0}
+  .brand svg{width:22px;height:22px}
+  .appsel{min-width:0;flex:1 1 auto}
+  .appsel select{max-width:42vw}
+  .topbar .seg{order:3;font-size:12px}
+  /* Периоды ужимаются до остатка строки и при нужде прокручиваются вбок,
+     иначе они занимают всю ширину и выталкивают значки темы на свой ряд. */
+  .topbar #ranges{overflow-x:auto;flex:1 1 170px;min-width:0}
+  .topbar #ranges button{white-space:nowrap;padding:7px 10px}
+  /* Тема встаёт В ТУ ЖЕ строку, что и период: отдельный ряд ради трёх
+     значков стоил сорока пикселей высоты на каждом экране. */
+  .seg-icons{order:3;flex:0 0 auto}
+  #signout{order:2;padding:7px 10px}
+
+  /* Строка сведений: шесть строк подряд превращаются в три ряда по двое.
+     «Хранение» и тумблер ключей занимают ряд целиком — у них длинный текст. */
+  .context{display:grid;grid-template-columns:1fr 1fr;margin-bottom:12px}
+  .ctx-cell{padding:9px 12px;min-height:42px;border-right:1px solid var(--line);
+    border-bottom:1px solid var(--line);gap:7px}
+  .ctx-cell:nth-child(2n){border-right:none}
+  .ctx-cell.grow,.ctx-cell:last-child{grid-column:1 / -1;border-right:none}
+  .ctx-cell:last-child{border-bottom:none}
+  /* Период сбора и место хранения на телефоне прячем: даты и так стоят в
+     заголовке первого блока, а «свой сервер» не меняется никогда. Остаются
+     четыре ячейки — два ряда вместо четырёх. */
+  .ctx-cell:first-child,.ctx-cell.grow{display:none}
+
+  /* Числа парами, всё остальное — во всю ширину. */
   .grid>*{grid-column:span 12}
-  .tiles{grid-template-columns:1fr}
-  .wrap{padding:14px 12px 80px}
+  .grid>.c3,.grid>.c4{grid-column:span 6}
+  .tiles{grid-template-columns:repeat(2,1fr)}
+
+  /* Крупная цифра не должна ломаться о край: 72 610 в шесть знаков. */
+  .hero{gap:12px}
+  .hero-val{font-size:clamp(34px,11vw,52px)}
+  .stat-val{font-size:clamp(22px,7vw,30px)}
+
+  /* Таблицы шире экрана прокручиваются внутри карточки, а не тянут страницу. */
+  .panel .tbl{display:block;overflow-x:auto;white-space:nowrap}
+
+  /* Ничего мельче одиннадцати пикселей: подписи ленты и шапки таблиц читались
+     с трудом даже на большом телефоне. */
+  /* подписи и так 11 px в общем стиле — тут только приписки блоков */
+  .block-note,.hero-note,.stat-sub{font-size:12px}
+}
+
+/* ---------- узкий телефон ---------- */
+/* На 360 и меньше пара чисел в ряд ещё влезает, а вот подписи периодов уже
+   нет — оставляем им прокрутку и режем отступы карточек. */
+@media (max-width:400px){
+  .panel{padding:14px}
+  .appsel select{max-width:36vw}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 
@@ -370,12 +431,12 @@ tr:hover .nm-edit button,.rrow:hover .nm-edit button,.nm-edit button:focus-visib
 .shelf .ph img{width:100%;height:100%;object-fit:cover;display:block}
 .shelf .ph.нет img{display:none}
 .shelf .ph.нет::after{content:"кадр ещё готовится";position:absolute;inset:0;display:flex;
-  align-items:center;justify-content:center;font-family:var(--mono);font-size:8.5px;
+  align-items:center;justify-content:center;font-family:var(--mono);font-size:10px;
   color:var(--ink-3);text-align:center;padding:4px}
 .shelf .vid::after{content:"видео";position:absolute;left:6px;bottom:5px;font-family:var(--mono);
-  font-size:8.5px;letter-spacing:.08em;color:var(--panel);background:rgba(0,0,0,.45);
+  font-size:10px;letter-spacing:.08em;color:var(--panel);background:rgba(0,0,0,.45);
   padding:1px 5px;border-radius:3px}
-.shelf figcaption{font-family:var(--mono);font-size:9.5px;letter-spacing:.05em;color:var(--ink-3);
+.shelf figcaption{font-family:var(--mono);font-size:11px;letter-spacing:.05em;color:var(--ink-3);
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .shelf-nav{display:flex;align-items:center;gap:12px;margin-top:14px}
 .shelf-nav .lbl{margin:0 auto}
