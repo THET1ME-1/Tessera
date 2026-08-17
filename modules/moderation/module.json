@@ -15,17 +15,10 @@
       "blocks": [
         {
           "type": "search",
-          "title": "Найти пару",
+          "title": "Найти",
           "span": 12,
-          "src": "moderation:pairs",
-          "placeholder": "id пары, имя участника или почта"
-        },
-        {
-          "type": "search",
-          "title": "Найти человека",
-          "span": 12,
-          "src": "moderation:people",
-          "placeholder": "почта, имя или id"
+          "src": "moderation:find",
+          "placeholder": "почта, имя, id пары или человека"
         },
         {
           "type": "stat",
@@ -55,6 +48,12 @@
     }
   ],
   "tiles": [
+    {
+      "type": "stat",
+      "title": "Сейчас на связи",
+      "src": "moderation:online",
+      "live": "20s"
+    },
     {
       "type": "stat",
       "title": "Файлов на модерации",

@@ -69,14 +69,23 @@
         </svg>
       </button>
     </div>
+    <button class="ghost-btn" id="refresh" title="Пересобрать данные">
+      <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" fill="none"
+           stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+        <path d="M14 8a6 6 0 1 1-1.8-4.3"/><path d="M14 1.6V4.4H11.2"/>
+      </svg>
+      <span class="lbl-btn">Обновить</span>
+    </button>
     <button class="ghost-btn" id="signout" title="Выйти">Выйти</button>
   </header>
 
   <div class="context">
     <div class="ctx-cell"><span class="lbl">Сбор</span><span class="ctx-v" id="ctx-range">—</span></div>
+    <div class="ctx-cell"><span class="lbl">На связи</span><span class="ctx-v num" id="ctx-online" title="Живые соединения приложения">—</span></div>
     <div class="ctx-cell"><span class="lbl">Люди</span><span class="ctx-v num" id="ctx-people">—</span></div>
     <div class="ctx-cell"><span class="lbl">События</span><span class="ctx-v num" id="ctx-events">—</span></div>
     <div class="ctx-cell"><span class="lbl">Версия SDK</span><span class="ctx-v mono" id="ctx-sdk">—</span></div>
+    <div class="ctx-cell"><span class="lbl">Собрано</span><span class="ctx-v" id="ctx-fresh">—</span></div>
     <div class="ctx-cell grow"><span class="lbl">Хранение</span><span class="ctx-v" id="ctx-keep">свой сервер</span></div>
     <div class="ctx-cell">
       <span class="switch" id="rawSwitch" role="switch" aria-checked="false" tabindex="0">

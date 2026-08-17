@@ -214,6 +214,21 @@ function блокMap(host, d) {
     "<span>вверх — " + (d.yLabel || "больше") + "</span></div>");
 }
 
+/* Возраст кадра словами. Модерации важно не точное время, а порядок величины:
+ * жалоба на сегодняшний снимок и на прошлогодний — разные разговоры. Дальше
+ * недели показываем дату: «14 авг» читается быстрее, чем «23 дня назад». */
+function давность(ts) {
+  const сек = Math.floor(Date.now() / 1000) - Number(ts || 0);
+  // Метка из будущего — не возраст, а сбитые часы на телефоне: такую не рисуем.
+  if (!ts || сек < -3600) return "";
+  if (сек < 60) return "только что";
+  if (сек < 3600) return Math.floor(сек / 60) + " мин назад";
+  if (сек < 86400) return Math.floor(сек / 3600) + " ч назад";
+  if (сек < 172800) return "вчера";
+  if (сек < 604800) return Math.floor(сек / 86400) + " дн назад";
+  return new Date(ts * 1000).toLocaleDateString("ru", { day: "numeric", month: "short" });
+}
+
 /* ── shelf: лента чужих кадров ───────────────────────────────────────────
  *
  * Единственная заготовка, которая ходит на сервер сама: собрать двести тысяч
@@ -228,19 +243,37 @@ function блокShelf(host, d, блок) {
   const items = d.items || [];
   const виды = d.kinds || [];
 
+  const замок = моё.adult || "";
+
   const фильтры = '<div class="seg shelf-filter" role="group" aria-label="Вид файла">' +
     '<button data-kind=""' + (вид ? "" : ' aria-pressed="true"') + ">Все</button>" +
     виды.map(k => '<button data-kind="' + k + '"' +
-      (k === вид ? ' aria-pressed="true"' : "") + ">" + k + "</button>").join("") + "</div>";
+      (k === вид ? ' aria-pressed="true"' : "") + ">" + k + "</button>").join("") + "</div>" +
+    // Замок ставит сама пара в приложении, модерация его только видит. Своей
+    // строкой, а не среди видов: вид и возрастная пометка — разные вопросы, и
+    // спрашивают их вместе («холсты, где стоит замок»).
+    '<div class="seg shelf-filter" role="group" aria-label="Возрастная пометка">' +
+    '<button data-adult=""' + (замок ? "" : ' aria-pressed="true"') + ">Любые</button>" +
+    '<button data-adult="only"' + (замок === "only" ? ' aria-pressed="true"' : "") +
+      ">Только 18+</button>" +
+    '<button data-adult="hide"' + (замок === "hide" ? ' aria-pressed="true"' : "") +
+      ">Без 18+</button></div>";
 
   const кадры = items.map((it, i) =>
-    '<figure data-i="' + i + '"><div class="ph' + (it.video ? " vid" : "") + '">' +
+    '<figure data-i="' + i + '"><div class="ph' + (it.video ? " vid" : "") +
+      (it.adult ? " adult" : "") + '">' +
       // Адрес обязательно через адрес(): модуль отдаёт путь от корня панели,
       // а панель живёт в подпапке (/tessera/). Без этого браузер уходил на
       // корень домена и получал пустоту — лента стояла без единого кадра.
       '<img loading="lazy" src="' + адрес(it.url) + '" alt="' + (it.caption || "кадр") + '"' +
       ' onerror="this.closest(&quot;.ph&quot;).classList.add(&quot;нет&quot;)">' +
-    "</div><figcaption>" + (it.caption || "") + "</figcaption></figure>").join("");
+    "</div><figcaption>" + (it.caption || "") +
+      (it.ts ? " · " + давность(it.ts) : "") + "</figcaption>" +
+    // id пары — то, с чем модератор уходит в поиск, в переписку и в поддержку.
+    // Поэтому он не подпись, а кнопка: щелчок кладёт его в буфер.
+    (it.group ? '<button class="pair-id" data-pair="' + it.group +
+      '" title="Скопировать id пары">' + it.group + "</button>" : "") +
+    "</figure>").join("");
 
   const листалка = '<div class="shelf-nav">' +
     '<button class="ghost-btn" data-page="' + (стр - 1) + '"' + (стр <= 0 ? " disabled" : "") +
@@ -257,14 +290,25 @@ function блокShelf(host, d, блок) {
     "дату загрузивший может подвинуть. Кадры чужие, поэтому наружу они не уходят.</p>";
 
   const перерисовать = async () => {
+    // Держим блок на месте: перерисовка меняет высоту, и страница уезжала
+    // к началу — человек листал ленту, а его выбрасывало наверх, к шапке.
+    const былоСверху = host.getBoundingClientRect().top;
+    host.style.minHeight = host.offsetHeight + "px";
     host.innerHTML = '<p class="block-empty">Загружаю ленту…</p>';
     const ссылка = адрес("/api/query") + "?src=" + encodeURIComponent(src) +
       "&page=" + (моё.page || 0) +
-      (моё.kind ? "&kind=" + encodeURIComponent(моё.kind) : "");
+      (моё.kind ? "&kind=" + encodeURIComponent(моё.kind) : "") +
+      (моё.adult ? "&adult=" + encodeURIComponent(моё.adult) : "");
     try {
       блокShelf(host, await взять(ссылка), блок);
     } catch (e) {
       пусто(host, "лента не пришла: " + e.message);
+    }
+    host.style.minHeight = "";
+    // Возвращаем блок туда, где он был под пальцем.
+    const сталоСверху = host.getBoundingClientRect().top;
+    if (Math.abs(сталоСверху - былоСверху) > 4) {
+      window.scrollBy({ top: сталоСверху - былоСверху, behavior: "instant" });
     }
   };
 
@@ -272,6 +316,30 @@ function блокShelf(host, d, блок) {
     моё.kind = b.dataset.kind;
     моё.page = 0;
     перерисовать();
+  }));
+  host.querySelectorAll("[data-adult]").forEach(b => b.addEventListener("click", () => {
+    моё.adult = b.dataset.adult;
+    моё.page = 0;
+    перерисовать();
+  }));
+  // Копирование id пары не должно открывать кадр: щелчок сюда — про пару, а
+  // не про картинку.
+  host.querySelectorAll(".pair-id").forEach(b => b.addEventListener("click", async e => {
+    e.stopPropagation();
+    const id = b.dataset.pair || "";
+    try {
+      await navigator.clipboard.writeText(id);
+      сказать("id пары скопирован");
+    } catch {
+      // Буфер закрыт (панель открыта не по https или права не даны) — тогда
+      // выделяем текст, чтобы человек забрал его сам.
+      const д = document.createRange();
+      д.selectNodeContents(b);
+      const s = window.getSelection();
+      s.removeAllRanges();
+      s.addRange(д);
+      сказать("скопируйте выделенное");
+    }
   }));
   host.querySelectorAll("[data-page]").forEach(b => b.addEventListener("click", () => {
     if (b.disabled) return;
@@ -335,19 +403,29 @@ function блокSearch(host, d, блок) {
       '" placeholder="' + подпись + '" aria-label="' + подпись + '" autocomplete="off">' +
     '<button class="ghost-btn" type="submit">Найти</button></form>';
 
+  // Ответ бывает двух видов: одна таблица (cols/rows) или несколько разделов
+  // (sections) — так один поиск отдаёт разом и людей, и их пары.
+  const разделы = d && d.sections ? d.sections
+    : (d && (d.rows || []).length ? [{ title: "", cols: d.cols, rows: d.rows }] : []);
+
+  const таблица = р => {
+    const шапка = (р.cols || []).map(c => "<th>" + c + "</th>").join("");
+    const тело = (р.rows || []).map(r =>
+      "<tr>" + r.map(v => "<td>" + (v === null || v === undefined ? "—" : v) + "</td>").join("") + "</tr>"
+    ).join("");
+    return (р.title ? '<p class="lbl found-title">' + р.title + " · " +
+              (р.rows || []).length + "</p>" : "") +
+      '<div class="table-wrap"><table class="tbl"><thead><tr>' + шапка +
+      "</tr></thead><tbody>" + тело + "</tbody></table></div>";
+  };
+
   let ответ;
   if (!было) {
     ответ = '<p class="block-empty">введите запрос</p>';
-  } else if (!d || !(d.rows || []).length) {
+  } else if (!разделы.length) {
     ответ = '<p class="block-empty">ничего не нашлось</p>';
   } else {
-    const шапка = (d.cols || []).map(c => "<th>" + c + "</th>").join("");
-    const тело = (d.rows || []).map(r =>
-      "<tr>" + r.map(v => "<td>" + (v === null || v === undefined ? "—" : v) + "</td>").join("") + "</tr>"
-    ).join("");
-    ответ = '<div class="table-wrap"><table><thead><tr>' + шапка +
-      "</tr></thead><tbody>" + тело + "</tbody></table></div>" +
-      '<p class="block-note">найдено ' + (d.rows || []).length + "</p>";
+    ответ = разделы.map(таблица).join("");
   }
 
   host.innerHTML = строка + ответ;

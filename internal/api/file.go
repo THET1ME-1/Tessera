@@ -59,18 +59,33 @@ func (a *API) file(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	raw, err := modules.Query(*m, filepath.Join(a.modulesDir, m.ID), ключ, параметры)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadGateway)
-		return
-	}
 	var ответ struct {
 		Path string `json:"path"`
 		Type string `json:"type"`
 	}
-	if err := json.Unmarshal(raw, &ответ); err != nil || ответ.Path == "" {
-		http.Error(w, "модуль не назвал файл", http.StatusBadGateway)
-		return
+
+	// Готовый путь модуль может назвать заранее — прямо в ленте, вместе с
+	// кадрами. Тогда за файлом лезть к нему незачем.
+	//
+	// Это не мелочь: страница ленты — шестьдесят кадров, и каждый поднимал
+	// отдельный процесс модуля. Даже с ограничителем в четыре штуки открытие
+	// вкладки превращалось в шестьдесят запусков питона, а при холодном кэше
+	// миниатюр упиралось в таймаут запроса и часть кадров не приезжала вовсе.
+	// Путь всё равно проверяется на принадлежность объявленному корню, так что
+	// подсунуть чужой файл через адрес нельзя.
+	if готовый := r.URL.Query().Get("path"); готовый != "" {
+		ответ.Path = готовый
+		ответ.Type = r.URL.Query().Get("type")
+	} else {
+		raw, err := modules.Query(*m, filepath.Join(a.modulesDir, m.ID), ключ, параметры)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadGateway)
+			return
+		}
+		if err := json.Unmarshal(raw, &ответ); err != nil || ответ.Path == "" {
+			http.Error(w, "модуль не назвал файл", http.StatusBadGateway)
+			return
+		}
 	}
 
 	корень, err := filepath.Abs(m.Root)

@@ -80,6 +80,7 @@ function viewOverview() {
     ) +
 
     '<div class="c12"><div class="tiles six">' +
+      liveTile("Сейчас на связи", "moderation:online") +
       tile("События", fmt(DATA.totals.events), "за 15 дней, свой сервер", dd.map(d => d.events)) +
       tile(state.людиСчитаются ? "Люди" : "Люди", state.людиСчитаются ? fmt(DATA.totals.people) : "не считаются",
            state.людиСчитаются ? "уникальных за период" : "тумблер выключен",
@@ -142,6 +143,17 @@ function viewOverview() {
   });
 }
 
+// Живая плитка: число берётся у модуля прямо сейчас и переспрашивается по
+// таймеру. Через общий сбор такое не проходит — онлайн, посчитанный полчаса
+// назад, это вчерашняя погода; а обзор пересобирать целиком ради одной цифры
+// значит терять прокрутку и открытые ленты каждые двадцать секунд.
+function liveTile(label, src) {
+  return '<div class="tile from-mod" data-live-src="' + src + '">' +
+    '<span class="lbl">' + label + "</span>" +
+    '<span class="tile-v">…</span>' +
+    '<span class="tile-sub">спрашиваю приложение</span></div>';
+}
+
 function modTile(label, value, sub) {
   return '<div class="tile from-mod"><span class="lbl">' + label + "</span>" +
     '<span class="tile-v">' + value + "</span>" +
@@ -201,7 +213,7 @@ const SCREEN_VIEWS = [["map", "Карта"], ["raster", "Растр"], ["table",
 function screensBlock(s) {
   const view = state.screenView || "map";
   const seg = '<div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:16px">' +
-    '<div class="seg" role="group" aria-label="Вид" style="width:max-content">' +
+    '<div class="seg" role="group" aria-label="Вид">' +
     SCREEN_VIEWS.map(([k, t]) => '<button data-screenview="' + k + '"' +
       (k === view ? ' aria-pressed="true"' : "") + ">" + t + "</button>").join("") + "</div>" +
     '<span class="lbl" style="margin-left:auto">имя правится кнопкой в строке</span></div>';

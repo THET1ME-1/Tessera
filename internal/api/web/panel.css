@@ -67,7 +67,7 @@ h1,h2,h3{margin:0;font-weight:500;font-family:var(--heading)}
 .topbar{display:flex;align-items:center;gap:14px;padding:0 0 16px}
 .brand{display:flex;align-items:center;gap:9px;font-weight:600;letter-spacing:-.01em;font-size:15px}
 .brand svg{display:block}
-.seg{display:flex;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.seg{display:flex;width:max-content;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
 .seg button{padding:7px 13px;font-size:12.5px;color:var(--ink-2);border-right:1px solid var(--line)}
 .seg button:last-child{border-right:none}
 .seg button[aria-pressed="true"]{background:var(--ink);color:var(--panel)}
@@ -263,7 +263,6 @@ h1,h2,h3{margin:0;font-weight:500;font-family:var(--heading)}
 .rrow .rn{font-family:var(--mono);font-size:12px;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .rrow .rv{font-variant-numeric:tabular-nums;font-size:12.5px;color:var(--ink-2);white-space:nowrap}
 .rrow svg{display:block;width:100%;height:auto;overflow:visible}
-@media (max-width:680px){ .rrow{grid-template-columns:11ch 1fr auto;gap:9px} }
 
 /* имя события: сверху то, что читает человек, снизу ключ из кода */
 .nm{display:flex;flex-direction:column;gap:2px;min-width:0}
@@ -331,10 +330,53 @@ tr:hover .nm-edit button,.rrow:hover .nm-edit button,.nm-edit button:focus-visib
      четыре ячейки — два ряда вместо четырёх. */
   .ctx-cell:first-child,.ctx-cell.grow{display:none}
 
-  /* Числа парами, всё остальное — во всю ширину. */
+  /* Фильтр ленты — тоже сеткой: шесть видов файлов в строку не влезают, и
+     «Голосовые» с «Маскотами» оказывались за краем. */
+  .shelf-filter{display:grid;grid-template-columns:repeat(3,1fr);width:auto;overflow:visible}
+  .shelf-filter button{padding:9px 6px;font-size:12px;text-align:center;
+    border-right:1px solid var(--line);border-bottom:1px solid var(--line)}
+  .shelf-filter button:nth-child(3n){border-right:none}
+  .shelf-filter button:nth-last-child(-n+3){border-bottom:none}
+
+  /* Вкладки сеткой, а не лентой с прокруткой вбок. Их девять; в строку они
+     не влезают ни на одном телефоне, и половина оказывалась за краем — чтобы
+     попасть на «Доход», надо было догадаться пролистнуть меню пальцем. */
+  .tabs{display:grid;grid-template-columns:repeat(3,1fr);overflow:visible}
+  .tabs button{padding:11px 6px;font-size:12px;text-align:center;
+    border-right:1px solid var(--line);border-bottom:1px solid var(--line)}
+  .tabs button:nth-child(3n){border-right:none}
+  .tabs button:nth-last-child(-n+3){border-bottom:none}
+
+  /* Период ужимаем так, чтобы четыре кнопки и три значка темы встали в строку
+     целиком: прокрутка внутри узкой полоски — худший способ выбрать период. */
+  .topbar #ranges button{padding:7px 7px;font-size:11px;letter-spacing:0}
+  .seg-icons button{padding:6px 8px}
+
+  /* Числа парами, всё остальное — во всю ширину.
+     `dense` обязателен: блоки идут вперемешку, и одиночная плитка между
+     двумя широкими оставляла половину строки пустой — ровно та дыра справа,
+     из-за которой экран выглядел сломанным. Плотная укладка подтягивает
+     следующую плитку на свободное место. */
+  /* Ширина решается ТИПОМ блока, а не числом колонок с большого экрана.
+     Парой встают только числа: у них внутри одна цифра и подпись. Всё, где
+     есть график, растр, таблица, лента или поиск, занимает строку целиком —
+     в половине они читаются как каша. `dense` подтягивает следующее число на
+     свободное место, чтобы рядом с одиночной плиткой не оставалась дыра. */
+  .grid{grid-auto-flow:dense}
   .grid>*{grid-column:span 12}
-  .grid>.c3,.grid>.c4{grid-column:span 6}
+  .grid>.b-stat{grid-column:span 6}
   .tiles{grid-template-columns:repeat(2,1fr)}
+
+  /* Подпись переносится и занимает СВОЮ строку, а полоса со значением встают
+     под ней. В одну строку имя не влезает никогда: колонка была 11 знаков, и
+     «Импульс «скучаю»» превращался в «Им...». */
+  .rrow{grid-template-columns:1fr auto;gap:4px 10px;align-items:center;padding:9px 0}
+  .rrow .nm{grid-column:1 / -1}
+  .rrow .nm b{white-space:normal;overflow:visible;text-overflow:clip;font-size:14px}
+  .rrow .nm small{font-size:11px}
+  .rrow svg{grid-column:1;align-self:center}
+  .rrow .rv{grid-column:2;font-size:14px;font-weight:500;color:var(--ink)}
+  .tbl td{white-space:normal;word-break:break-word}
 
   /* Крупная цифра не должна ломаться о край: 72 610 в шесть знаков. */
   .hero{gap:12px}
@@ -423,9 +465,23 @@ tr:hover .nm-edit button,.rrow:hover .nm-edit button,.nm-edit button:focus-visib
 .search-row input::placeholder{color:var(--ink-3)}
 .search-row button{flex:0 0 auto}
 .table-wrap{overflow-x:auto}
+.found-title{margin:16px 0 8px;color:var(--ink-2)}
+.found-title:first-child{margin-top:4px}
 
 .shelf-filter{margin-bottom:14px;width:max-content;max-width:100%;overflow-x:auto}
+.shelf-filter + .shelf-filter{margin-top:-6px}
 .shelf{display:grid;grid-template-columns:repeat(10,1fr);gap:6px}
+/* Замок пары. Значок сидит в углу кадра и читается раньше подписи: на ленте в
+   шестьдесят плиток возрастную пометку ищут глазами, а не чтением. */
+.shelf .adult::before{content:"18+";position:absolute;right:5px;top:5px;z-index:1;
+  font-family:var(--mono);font-size:10px;letter-spacing:.06em;line-height:1;
+  padding:3px 4px;border-radius:4px;background:var(--panel);color:var(--ink-1);
+  border:1px solid var(--line)}
+/* id пары — кнопка, а не подпись: с него начинается любой разбор жалобы. */
+.shelf .pair-id{font-family:var(--mono);font-size:10px;letter-spacing:.04em;
+  color:var(--ink-3);background:none;border:none;padding:0;text-align:left;cursor:copy;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;width:100%}
+.shelf .pair-id:hover{color:var(--ink-1)}
 .shelf figure{margin:0;display:flex;flex-direction:column;gap:5px;min-width:0;cursor:zoom-in}
 .shelf .ph{aspect-ratio:1;border-radius:var(--r);background:var(--panel-2);overflow:hidden;position:relative}
 .shelf .ph img{width:100%;height:100%;object-fit:cover;display:block}
@@ -448,3 +504,25 @@ tr:hover .nm-edit button,.rrow:hover .nm-edit button,.nm-edit button:focus-visib
 .light-bar .lbl{color:#c9c9c2}
 @media (max-width:1080px){ .shelf{grid-template-columns:repeat(6,1fr)} }
 @media (max-width:680px){ .shelf{grid-template-columns:repeat(3,1fr)} }
+/* На телефоне кадр важнее числа кадров: модератор смотрит, что на снимке,
+   а не пересчитывает плитки. Две в ряд дают 195 px вместо 128. */
+@media (max-width:480px){ .shelf{grid-template-columns:repeat(2,1fr);gap:8px}
+  /* Переключатель вида на телефоне делит строку поровну. Листать его вбок
+     нечестно: третий вариант уезжает за край, и о нём никто не узнаёт. */
+  .seg{width:auto;display:grid;grid-template-columns:repeat(3,1fr)}
+  .seg button{padding:9px 4px;text-align:center}
+  .shelf figcaption{font-size:12px} }
+
+/* Кнопка пересбора и всё, что она объясняет. */
+.ghost-btn .lbl-btn{margin-left:6px}
+.ghost-btn svg{vertical-align:-3px}
+.ghost-btn.крутится svg{animation:оборот 1s linear infinite}
+@keyframes оборот{to{transform:rotate(360deg)}}
+/* Период, который ничего не решает, гаснет и говорит почему: жать кнопку и не
+   видеть перемен — худшее из состояний. */
+.seg.не-влияет{opacity:.42}
+.seg.не-влияет button{cursor:not-allowed}
+.тост{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);z-index:60;
+  max-width:min(92vw,520px);padding:11px 15px;border:1px solid var(--line);
+  border-radius:var(--r);background:var(--panel);color:var(--ink);font-size:13px;line-height:1.45}
+@media (max-width:480px){ .ghost-btn .lbl-btn{display:none} }

@@ -39,6 +39,7 @@ func (a *API) Routes() *http.ServeMux {
 	mux.Handle("/api/catalog", Middleware(a.secret, http.HandlerFunc(a.catalog)))
 	mux.Handle("/api/file", Middleware(a.secret, http.HandlerFunc(a.file)))
 	mux.Handle("/api/query", Middleware(a.secret, http.HandlerFunc(a.query)))
+	mux.Handle("/api/refresh", Middleware(a.secret, http.HandlerFunc(a.refresh)))
 	// Вкладки ядра нарисованы в макете до последней подписи, поэтому получают
 	// весь набор данных разом, а не по блоку за запрос.
 	mux.Handle("/api/core", Middleware(a.secret, http.HandlerFunc(a.всеДанные)))
@@ -110,7 +111,64 @@ func (a *API) layout(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "раскладка испорчена", http.StatusInternalServerError)
 		return
 	}
+	if tab == "overview" {
+		bs = a.дополнитьНовымиПлитками(bs)
+	}
 	отдать(w, map[string]any{"tab": tab, "blocks": bs})
+}
+
+// дополнитьНовымиПлитками добавляет на настроенный обзор то, чего человек ещё
+// не видел.
+//
+// Раскладку правят, и она ложится в базу; после этого блоки нового модуля в
+// неё не попадали вовсе — плитка оставалась невидимой навсегда, а модуль
+// выглядел неработающим. Возвращать её при каждом открытии тоже нельзя:
+// убранное обязано оставаться убранным. Поэтому каждая плитка предлагается
+// РОВНО ОДИН РАЗ, а отметка о показе живёт в настройках.
+func (a *API) дополнитьНовымиПлитками(bs []blocks.Block) []blocks.Block {
+	есть := map[string]bool{}
+	for _, b := range bs {
+		есть[b.Src] = true
+	}
+	новые := []blocks.Block{}
+	for _, п := range a.плиткиМодулей() {
+		if есть[п.Src] {
+			continue
+		}
+		ключ := "tile.offered." + п.Src
+		var было string
+		a.s.DB().QueryRow(`SELECT v FROM settings WHERE k=?`, ключ).Scan(&было)
+		if было != "" {
+			continue // уже предлагали, человек её убрал — не навязываемся
+		}
+		a.s.DB().Exec(`INSERT INTO settings (k,v) VALUES (?,?)
+			ON CONFLICT(k) DO UPDATE SET v=excluded.v`, ключ, "1")
+		if п.Span == 0 {
+			// Модуль вправе не указывать ширину: плитка везде плитка. Ноль в
+			// сетке из двенадцати колонок даёт блок нулевой ширины, то есть
+			// невидимый — ровно то, чего мы пытаемся избежать.
+			п.Span = 3
+		}
+		новые = append(новые, п)
+	}
+	if len(новые) == 0 {
+		return bs
+	}
+	// Живое вперёд: «сколько сейчас на связи» — это первое, на что смотрят,
+	// открывая панель, а итоги за месяц подождут второго ряда. Внутри групп
+	// порядок остаётся тем, в каком модули их объявили.
+	порядок := append([]blocks.Block{}, новые...)
+	живые, прочие := []blocks.Block{}, []blocks.Block{}
+	for _, б := range порядок {
+		if б.Live != "" {
+			живые = append(живые, б)
+		} else {
+			прочие = append(прочие, б)
+		}
+	}
+	// Новое кладём в начало: хвост настроенной раскладки человек может и не
+	// пролистать, а не увиденная плитка равносильна её отсутствию.
+	return append(append(живые, прочие...), bs...)
 }
 
 // плиткиМодулей — то, что модули предлагают положить на обзор. Порядок как у
@@ -163,6 +221,26 @@ func (a *API) block(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Блок, объявленный зависимым от периода, считается на месте: у модуля
+	// есть подневные данные, а у предсчитанной сводки периода нет вовсе.
+	if a.блокСПериодом(владелец, ключ) {
+		ms, _ := modules.Load(a.modulesDir)
+		for _, m := range ms {
+			if m.ID != владелец {
+				continue
+			}
+			out, err := modules.Query(m, filepath.Join(a.modulesDir, m.ID), ключ,
+				map[string]string{"from": from, "to": to, "app": app})
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadGateway)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			w.Write(out)
+			return
+		}
+	}
+
 	// Данные модуля панель читает из базы: она не ждёт, пока чужая программа
 	// сходит в четыре чужих API.
 	var raw string
@@ -174,6 +252,32 @@ func (a *API) block(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.Write([]byte(raw))
+}
+
+// блокСПериодом — объявлял ли модуль этот блок зависимым от периода.
+// Ответ ищется в манифестах: договор один и тот же для вкладок и для плиток
+// обзора, поэтому смотрим оба места.
+func (a *API) блокСПериодом(владелец, ключ string) bool {
+	адрес := владелец + ":" + ключ
+	ms, _ := modules.Load(a.modulesDir)
+	for _, m := range ms {
+		if m.ID != владелец {
+			continue
+		}
+		for _, t := range m.Tabs {
+			for _, b := range t.Blocks {
+				if b.Src == адрес && b.Ranged {
+					return true
+				}
+			}
+		}
+		for _, b := range m.Tiles {
+			if b.Src == адрес && b.Ranged {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func (a *API) tabs(w http.ResponseWriter, r *http.Request) {
@@ -290,6 +394,28 @@ func (a *API) query(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.Error(w, "нет такого модуля", http.StatusNotFound)
+}
+
+// refresh пересобирает модули по требованию человека.
+//
+// Сводки считает расписание, и это правильно: панель не должна ждать, пока
+// чужая программа сходит в четыре чужих API. Но раз в двадцать минут — это
+// двадцать минут, в течение которых свежая покупка в панели не видна, а
+// объяснить это числами нельзя: со стороны выглядит как неверный расчёт.
+// Кнопка закрывает разрыв, не превращая каждое открытие вкладки в сбор.
+func (a *API) refresh(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "только POST", http.StatusMethodNotAllowed)
+		return
+	}
+	только := r.URL.Query().Get("module")
+	if err := modules.СобратьВсе(a.s.DB(), a.modulesDir, только); err != nil {
+		// Часть модулей могла собраться, поэтому это не отказ, а предупреждение:
+		// панель покажет, что именно не вышло, и нарисует то, что есть.
+		отдать(w, map[string]any{"ok": false, "error": err.Error(), "at": time.Now().Unix()})
+		return
+	}
+	отдать(w, map[string]any{"ok": true, "at": time.Now().Unix()})
 }
 
 // catalog — что можно положить на вкладку: блоки ядра плюс то, что предлагают

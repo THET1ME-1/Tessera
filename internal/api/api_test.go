@@ -225,3 +225,97 @@ func TestСостояниеОтвечаетБезКуки(t *testing.T) {
 		t.Fatalf("ответ без куки: %s", rec.Body.String())
 	}
 }
+
+// Блок, зависящий от периода, обязан спрашивать модуль заново — с датами.
+//
+// Пока такие блоки читались из предсказанной таблицы, переключатель «7 дней /
+// 30 дней / всё время» на вкладке дохода не менял ни одного числа: модуль
+// собирает данные командой `collect`, где периода нет вовсе. Со стороны это
+// выглядит как сломанные кнопки, а на деле — как неверная сумма.
+func TestБлокСПериодомСпрашиваетМодульСДатами(t *testing.T) {
+	s, err := store.Open(filepath.Join(t.TempDir(), "t.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+
+	модули := t.TempDir()
+	папка := filepath.Join(модули, "income")
+	os.MkdirAll(папка, 0o755)
+	// Модуль печатает то, что ему передали: так видно, доехал ли период.
+	os.WriteFile(filepath.Join(папка, "main.sh"),
+		[]byte(`printf '{"value":1,"sub":%s}' "$3"`), 0o755)
+	os.WriteFile(filepath.Join(папка, "module.json"), []byte(`{
+		"id":"income","name":"Доход","run":["sh","main.sh"],
+		"tabs":[{"id":"income","title":"Доход","blocks":[
+			{"type":"stat","title":"За период","src":"income:month","ranged":true}]}]}`), 0o644)
+
+	секрет := []byte("подпись")
+	a := New(s, модули, секрет)
+	кука := Cookie(секрет, time.Now().Add(time.Hour))
+	// Предсчитанное лежит в базе и НЕ должно попасть в ответ: оно без периода.
+	a.s.DB().Exec(`INSERT INTO module_data (module,key,json,updated) VALUES (?,?,?,?)`,
+		"income", "month", `{"value":377.86,"sub":"с начала месяца"}`, time.Now().Unix())
+
+	rec := запрос(t, a, "GET", "/api/block?src=income:month&range=7d", кука, "")
+	if rec.Code != 200 {
+		t.Fatalf("код %d: %s", rec.Code, rec.Body.String())
+	}
+	тело := rec.Body.String()
+	if strings.Contains(тело, "377.86") {
+		t.Fatalf("отдано предсчитанное вместо счёта за период: %s", тело)
+	}
+	if !strings.Contains(тело, `"from"`) || !strings.Contains(тело, `"to"`) {
+		t.Fatalf("модулю не передали границы периода: %s", тело)
+	}
+}
+
+
+// Новая плитка модуля появляется на обзоре и в уже настроенной раскладке —
+// но ровно один раз.
+//
+// Раскладку человек правит и она ложится в базу; после этого блоки нового
+// модуля в неё не попадали вовсе, и плитка оставалась невидимой навсегда.
+// Возвращать её каждый раз тоже нельзя: убранное должно оставаться убранным.
+func TestНоваяПлиткаМодуляДоезжаетДоНастроенногоОбзора(t *testing.T) {
+	s, err := store.Open(filepath.Join(t.TempDir(), "t.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+
+	модули := t.TempDir()
+	папка := filepath.Join(модули, "moderation")
+	os.MkdirAll(папка, 0o755)
+	os.WriteFile(filepath.Join(папка, "module.json"), []byte(`{
+		"id":"moderation","name":"Модерация","run":["sh","main.sh"],
+		"tiles":[{"type":"stat","title":"Сейчас на связи","src":"moderation:online","live":"20s","span":3}]}`), 0o644)
+
+	// Человек уже настроил обзор, и плитки модерации там нет.
+	s.DB().Exec(`INSERT INTO layout (tab, blocks, updated) VALUES (?,?,?)`,
+		"overview", `[{"type":"stat","title":"Онлайн сейчас","span":3,"src":"core:online"}]`,
+		time.Now().Unix())
+
+	секрет := []byte("подпись")
+	a := New(s, модули, секрет)
+	кука := Cookie(секрет, time.Now().Add(time.Hour))
+
+	есть := func() bool {
+		rec := запрос(t, a, "GET", "/api/layout?tab=overview", кука, "")
+		return strings.Contains(rec.Body.String(), "moderation:online")
+	}
+
+	if !есть() {
+		t.Fatal("новая плитка модуля не доехала до настроенного обзора")
+	}
+
+	// Человек убрал её и сохранил раскладку без неё — значит она не нужна.
+	rec := запрос(t, a, "POST", "/api/layout", кука,
+		`{"tab":"overview","blocks":[{"type":"stat","title":"Онлайн сейчас","span":3,"src":"core:online"}]}`)
+	if rec.Code != 200 {
+		t.Fatalf("раскладка не сохранилась: %d %s", rec.Code, rec.Body.String())
+	}
+	if есть() {
+		t.Fatal("убранная плитка вернулась сама")
+	}
+}
