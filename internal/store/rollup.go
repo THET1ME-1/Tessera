@@ -5,6 +5,76 @@ import (
 	"time"
 )
 
+// запросСводки — один читающий запрос пересчёта вместе с готовыми аргументами.
+// Собран отдельно, чтобы тест проверял план того самого SQL, который потом и
+// выполняется, а не своей копии.
+type запросСводки struct {
+	имя       string
+	sql       string
+	аргументы []any
+}
+
+// границыДня переводит «2026-08-14» в полуинтервал меток времени [начало,
+// конец): полночь UTC входит в сутки, полночь следующих — уже нет.
+func границыДня(day string) (int64, int64, error) {
+	д, err := time.Parse(time.DateOnly, day)
+	if err != nil {
+		return 0, 0, fmt.Errorf("разобрать день %q: %w", day, err)
+	}
+	начало := д.UTC().Unix()
+	return начало, начало + 24*60*60, nil
+}
+
+// запросыСводкиДня отдаёт четыре запроса, которые читают сырьё за сутки.
+//
+// День задан диапазоном меток времени, а не выражением date(ts,'unixepoch'):
+// функция от колонки закрывает индекс, и тогда пересчёт одних суток читает всю
+// историю приложения. Индекс events_ts сужает выборку до нужного дня.
+func запросыСводкиДня(app, day string) ([]запросСводки, error) {
+	начало, конец, err := границыДня(day)
+	if err != nil {
+		return nil, err
+	}
+	деньИСутки := []any{day, app, начало, конец}
+
+	return []запросСводки{
+		{имя: "сводка дня", аргументы: деньИСутки, sql: `
+		INSERT INTO daily (app, day, kind, name, hits, people, ms)
+		SELECT app, ?, kind, name,
+		       count(*), count(DISTINCT who), coalesce(sum(ms),0)
+		FROM events WHERE app=? AND ts>=? AND ts<?
+		GROUP BY app, kind, name`},
+
+		// Платформа человека за день — та, с которой он слал события чаще всего:
+		// один и тот же человек бывает и на телефоне, и на планшете.
+		{имя: "посетители", аргументы: деньИСутки, sql: `
+		INSERT OR IGNORE INTO seen (app, day, who, platform)
+		SELECT app, день, who, platform FROM (
+			SELECT app, ? AS день, who, platform, count(*) AS n,
+			       row_number() OVER (PARTITION BY who ORDER BY count(*) DESC) AS место
+			FROM events
+			WHERE app=? AND ts>=? AND ts<? AND who IS NOT NULL
+			GROUP BY who, platform)
+		WHERE место = 1`},
+
+		{имя: "часы", аргументы: деньИСутки, sql: `
+		INSERT INTO hourly (app, day, hour, hits, people)
+		SELECT app, ?,
+		       cast(strftime('%H', ts, 'unixepoch') AS INTEGER),
+		       count(*), count(DISTINCT who)
+		FROM events WHERE app=? AND ts>=? AND ts<?
+		GROUP BY 3`},
+
+		{имя: "версии", аргументы: деньИСутки, sql: `
+		INSERT INTO versions (app, day, version, people)
+		SELECT app, ?,
+		       coalesce(nullif(version,''),'неизвестно'),
+		       count(DISTINCT coalesce(who, eid))
+		FROM events WHERE app=? AND ts>=? AND ts<?
+		GROUP BY 3`},
+	}, nil
+}
+
 // RollupDay переписывает сводку дня целиком.
 //
 // Именно переписывает, а не прибавляет: только так пересчёт можно гонять
@@ -18,57 +88,20 @@ func (s *Store) RollupDay(app, day string) error {
 	}
 	defer tx.Rollback()
 
-	if _, err := tx.Exec(`DELETE FROM daily WHERE app=? AND day=?`, app, day); err != nil {
-		return fmt.Errorf("очистить день: %w", err)
+	for _, таблица := range []string{"daily", "seen", "hourly", "versions"} {
+		if _, err := tx.Exec(
+			`DELETE FROM `+таблица+` WHERE app=? AND day=?`, app, day); err != nil {
+			return fmt.Errorf("очистить %s: %w", таблица, err)
+		}
 	}
-	if _, err := tx.Exec(`
-		INSERT INTO daily (app, day, kind, name, hits, people, ms)
-		SELECT app, date(ts,'unixepoch'), kind, name,
-		       count(*), count(DISTINCT who), coalesce(sum(ms),0)
-		FROM events WHERE app=? AND date(ts,'unixepoch')=?
-		GROUP BY app, kind, name`, app, day); err != nil {
-		return fmt.Errorf("посчитать день: %w", err)
+	запросы, err := запросыСводкиДня(app, day)
+	if err != nil {
+		return err
 	}
-	if _, err := tx.Exec(`DELETE FROM seen WHERE app=? AND day=?`, app, day); err != nil {
-		return fmt.Errorf("очистить посетителей: %w", err)
-	}
-	// Платформа человека за день — та, с которой он слал события чаще всего:
-	// один и тот же человек бывает и на телефоне, и на планшете.
-	if _, err := tx.Exec(`
-		INSERT OR IGNORE INTO seen (app, day, who, platform)
-		SELECT app, день, who, platform FROM (
-			SELECT app, date(ts,'unixepoch') AS день, who, platform, count(*) AS n,
-			       row_number() OVER (PARTITION BY who ORDER BY count(*) DESC) AS место
-			FROM events
-			WHERE app=? AND date(ts,'unixepoch')=? AND who IS NOT NULL
-			GROUP BY who, platform)
-		WHERE место = 1`, app, day); err != nil {
-		return fmt.Errorf("записать посетителей: %w", err)
-	}
-	if _, err := tx.Exec(`DELETE FROM hourly WHERE app=? AND day=?`, app, day); err != nil {
-		return fmt.Errorf("очистить часы: %w", err)
-	}
-	if _, err := tx.Exec(`
-		INSERT INTO hourly (app, day, hour, hits, people)
-		SELECT app, date(ts,'unixepoch'),
-		       cast(strftime('%H', ts, 'unixepoch') AS INTEGER),
-		       count(*), count(DISTINCT who)
-		FROM events WHERE app=? AND date(ts,'unixepoch')=?
-		GROUP BY 3`, app, day); err != nil {
-		return fmt.Errorf("посчитать часы: %w", err)
-	}
-
-	if _, err := tx.Exec(`DELETE FROM versions WHERE app=? AND day=?`, app, day); err != nil {
-		return fmt.Errorf("очистить версии: %w", err)
-	}
-	if _, err := tx.Exec(`
-		INSERT INTO versions (app, day, version, people)
-		SELECT app, date(ts,'unixepoch'),
-		       coalesce(nullif(version,''),'неизвестно'),
-		       count(DISTINCT coalesce(who, eid))
-		FROM events WHERE app=? AND date(ts,'unixepoch')=?
-		GROUP BY 3`, app, day); err != nil {
-		return fmt.Errorf("посчитать версии: %w", err)
+	for _, запрос := range запросы {
+		if _, err := tx.Exec(запрос.sql, запрос.аргументы...); err != nil {
+			return fmt.Errorf("посчитать %s: %w", запрос.имя, err)
+		}
 	}
 
 	// Отметка первого дня. INSERT OR IGNORE бережёт уже записанное: человек
