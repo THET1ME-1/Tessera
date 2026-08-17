@@ -222,13 +222,13 @@ h1,h2,h3{margin:0;font-weight:500;font-family:var(--heading)}
 .tile.from-mod{position:relative}
 .tile.from-mod .lbl::before{content:"";display:inline-block;width:7px;height:7px;border-radius:2px;background:var(--ink-3);margin-right:7px;vertical-align:1px}
 /* лента модерации: плитка — тот же квадрат растра, только крупный */
-.shelf{display:grid;grid-template-columns:repeat(8,1fr);gap:6px}
+.shelf{display:grid;gap:6px}
 .shelf figure{margin:0;display:flex;flex-direction:column;gap:5px;min-width:0}
 .shelf .ph{aspect-ratio:1;border-radius:var(--r);background:var(--panel-2);position:relative;overflow:hidden}
 .shelf .ph svg{position:absolute;inset:0;width:100%;height:100%}
 .shelf figcaption{font-family:var(--mono);font-size:11px;letter-spacing:.05em;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .shelf .vid::after{content:"видео";position:absolute;left:6px;bottom:5px;font-family:var(--mono);font-size:10px;letter-spacing:.08em;color:var(--ink-2)}
-@media (max-width:1080px){ .tiles.six{grid-template-columns:repeat(3,1fr)} .shelf{grid-template-columns:repeat(4,1fr)} }
+@media (max-width:1080px){ .tiles.six{grid-template-columns:repeat(3,1fr)} }
 /* длинная подпись заголовка на телефоне переносится, а не тянет страницу вбок */
 @media (max-width:680px){
   .panel-head{flex-wrap:wrap;row-gap:4px}
@@ -238,7 +238,7 @@ h1,h2,h3{margin:0;font-weight:500;font-family:var(--heading)}
   .ctx-cell{border-right:none;border-bottom:1px solid var(--line);width:100%}
   .ctx-cell:last-child{border-bottom:none}
 }
-@media (max-width:680px){ .tiles.six{grid-template-columns:repeat(2,1fr)} .shelf{grid-template-columns:repeat(3,1fr)} }
+@media (max-width:680px){ .tiles.six{grid-template-columns:repeat(2,1fr)} }
 /* карточка модуля */
 .mods{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
 .mod{background:var(--panel-2);border-radius:var(--r);padding:16px 18px;display:flex;flex-direction:column;gap:9px}
@@ -470,7 +470,16 @@ tr:hover .nm-edit button,.rrow:hover .nm-edit button,.nm-edit button:focus-visib
 
 .shelf-filter{margin-bottom:14px;width:max-content;max-width:100%;overflow-x:auto}
 .shelf-filter + .shelf-filter{margin-top:-6px}
-.shelf{display:grid;grid-template-columns:repeat(10,1fr);gap:6px}
+/* Плотность сетки живёт в двух переменных. `--cols-auto` — то, что даёт сама
+   ширина экрана, и её никто не переопределяет: по ней ползунок знает свой
+   потолок. `--cols` — выбор человека, он приезжает inline-стилем. */
+.shelf{--cols-auto:10;--cols:var(--cols-auto);
+  display:grid;grid-template-columns:repeat(var(--cols),1fr);gap:6px}
+.shelf-cols{display:inline-flex;align-items:center;gap:10px;margin:0 0 14px;
+  font-family:var(--mono);font-size:11px;letter-spacing:.05em;color:var(--ink-3);
+  vertical-align:top;height:34px}
+.shelf-cols input{width:120px;margin-right:-2px;accent-color:var(--ink-2);cursor:pointer}
+.shelf-cols b{font-weight:400;color:var(--ink-1);min-width:2ch}
 /* Замок пары. Значок сидит в углу кадра и читается раньше подписи: на ленте в
    шестьдесят плиток возрастную пометку ищут глазами, а не чтением. */
 .shelf .adult::before{content:"18+";position:absolute;right:5px;top:5px;z-index:1;
@@ -502,11 +511,11 @@ tr:hover .nm-edit button,.rrow:hover .nm-edit button,.nm-edit button:focus-visib
 .light img{max-width:100%;max-height:88vh;object-fit:contain;border-radius:var(--r)}
 .light-bar{position:absolute;left:0;right:0;bottom:0;padding:14px 20px;text-align:center}
 .light-bar .lbl{color:#c9c9c2}
-@media (max-width:1080px){ .shelf{grid-template-columns:repeat(6,1fr)} }
-@media (max-width:680px){ .shelf{grid-template-columns:repeat(3,1fr)} }
+@media (max-width:1080px){ .shelf{--cols-auto:6} }
+@media (max-width:680px){ .shelf{--cols-auto:3} }
 /* На телефоне кадр важнее числа кадров: модератор смотрит, что на снимке,
    а не пересчитывает плитки. Две в ряд дают 195 px вместо 128. */
-@media (max-width:480px){ .shelf{grid-template-columns:repeat(2,1fr);gap:8px}
+@media (max-width:480px){ .shelf{--cols-auto:2;gap:8px}
   /* Переключатель вида на телефоне делит строку поровну. Листать его вбок
      нечестно: третий вариант уезжает за край, и о нём никто не узнаёт. */
   .seg{width:auto;display:grid;grid-template-columns:repeat(3,1fr)}

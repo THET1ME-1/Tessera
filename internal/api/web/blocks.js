@@ -257,7 +257,13 @@ function блокShelf(host, d, блок) {
     '<button data-adult="only"' + (замок === "only" ? ' aria-pressed="true"' : "") +
       ">Только 18+</button>" +
     '<button data-adult="hide"' + (замок === "hide" ? ' aria-pressed="true"' : "") +
-      ">Без 18+</button></div>";
+      ">Без 18+</button></div>" +
+    // Плотность сетки. Мельче ширины экрана лента не станет, поэтому потолок
+    // ползунка — то, что даёт CSS сам; крайнее правое положение и есть
+    // «как было». Число подставляется после вставки в DOM, когда потолок
+    // известен.
+    '<label class="shelf-cols">в ряд<input type="range" min="1" step="1" value="1"' +
+      ' aria-label="Кадров в ряд"><b></b></label>';
 
   const кадры = items.map((it, i) =>
     '<figure data-i="' + i + '"><div class="ph' + (it.video ? " vid" : "") +
@@ -322,6 +328,32 @@ function блокShelf(host, d, блок) {
     моё.page = 0;
     перерисовать();
   }));
+
+  // Плотность сетки меняется на месте, без похода на сервер: те же кадры,
+  // другой размер. Потолок берём у CSS — сколько колонок даёт эта ширина.
+  const сетка = host.querySelector(".shelf");
+  const ползунок = host.querySelector(".shelf-cols input");
+  if (сетка && ползунок) {
+    const потолок = Number(getComputedStyle(сетка).getPropertyValue("--cols-auto")) || 10;
+    const показать = n => {
+      сетка.style.setProperty("--cols", n);
+      ползунок.parentElement.querySelector("b").textContent = n;
+    };
+    // Выбор переживает перезагрузку: плотность подбирают под свой монитор
+    // один раз, и просить об этом каждое утро незачем.
+    const запомненное = Number(моё.cols || localStorage.getItem("tessera:shelf-cols"));
+    ползунок.max = потолок;
+    ползунок.value = Math.min(запомненное || потолок, потолок) || потолок;
+    показать(Number(ползунок.value));
+    ползунок.addEventListener("input", () => {
+      моё.cols = Number(ползунок.value);
+      показать(моё.cols);
+      try { localStorage.setItem("tessera:shelf-cols", String(моё.cols)); } catch { /* приватный режим */ }
+    });
+  } else if (ползунок) {
+    // Лента пуста — сетки нет, и крутить нечего.
+    ползунок.closest(".shelf-cols").remove();
+  }
   // Копирование id пары не должно открывать кадр: щелчок сюда — про пару, а
   // не про картинку.
   host.querySelectorAll(".pair-id").forEach(b => b.addEventListener("click", async e => {
