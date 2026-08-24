@@ -398,6 +398,25 @@ func (a *API) данныеМодулей() (any, error) {
 	return out, rows.Err()
 }
 
+// Запросы списка приложений вынесены сюда, чтобы их планы стерёг тест
+// TestСписокПриложенийНеЧитаетСырыеСобытия: список собирается на каждый запрос
+// ядра, и заглянуть отсюда в сырые события — значит прочитать их все.
+const (
+	sqlСобытийПриложения = `SELECT coalesce(sum(hits),0) FROM daily WHERE app=?`
+	sqlЛюдейПриложения   = `SELECT count(DISTINCT who) FROM seen WHERE app=?`
+	sqlЗаСуткиПриложения = `SELECT count(*) FROM seen WHERE app=? AND day=?`
+	// Версия сборки — самая ходовая за последний посчитанный день. Раньше
+	// бралась версия последнего события, но ради неё SQLite сортировал всю
+	// таблицу событий: плана без сортировки для «ORDER BY id DESC» у него нет.
+	sqlВерсииПриложения = `SELECT version FROM versions WHERE app=?
+		ORDER BY day DESC, people DESC LIMIT 1`
+	// Платформы лежат и в seen — по строке на «день, человек», а не на
+	// событие. Лимит тут честный: список короткий, и скан кончается вместе с
+	// таблицей, а не с двадцатью восемью миллионами строк.
+	sqlПлатформПриложения = `SELECT DISTINCT platform FROM seen
+		WHERE app=? AND platform IS NOT NULL AND platform<>'' LIMIT 4`
+)
+
 func (a *API) приложения() (any, error) {
 	apps, err := a.s.Apps()
 	if err != nil {
@@ -406,16 +425,13 @@ func (a *API) приложения() (any, error) {
 	out := []map[string]any{}
 	for _, app := range apps {
 		var события, людей, заСутки float64
-		a.s.DB().QueryRow(`SELECT coalesce(sum(hits),0) FROM daily WHERE app=?`,
-			app.ID).Scan(&события)
-		a.s.DB().QueryRow(`SELECT count(DISTINCT who) FROM seen WHERE app=?`,
-			app.ID).Scan(&людей)
-		a.s.DB().QueryRow(`SELECT count(*) FROM seen WHERE app=? AND day=?`,
+		a.s.DB().QueryRow(sqlСобытийПриложения, app.ID).Scan(&события)
+		a.s.DB().QueryRow(sqlЛюдейПриложения, app.ID).Scan(&людей)
+		a.s.DB().QueryRow(sqlЗаСуткиПриложения,
 			app.ID, time.Now().UTC().Format("2006-01-02")).Scan(&заСутки)
 
 		var sdk sql.NullString
-		a.s.DB().QueryRow(`SELECT version FROM events WHERE app=? ORDER BY id DESC LIMIT 1`,
-			app.ID).Scan(&sdk)
+		a.s.DB().QueryRow(sqlВерсииПриложения, app.ID).Scan(&sdk)
 
 		out = append(out, map[string]any{
 			"id": app.ID, "name": app.Name, "live": события > 0,
@@ -427,8 +443,7 @@ func (a *API) приложения() (any, error) {
 }
 
 func платформыСтрокой(a *API, app string) string {
-	rows, err := a.s.DB().Query(`SELECT DISTINCT coalesce(nullif(platform,''),'') FROM events
-		WHERE app=? LIMIT 4`, app)
+	rows, err := a.s.DB().Query(sqlПлатформПриложения, app)
 	if err != nil {
 		return ""
 	}
