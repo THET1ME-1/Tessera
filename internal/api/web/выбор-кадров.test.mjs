@@ -57,5 +57,24 @@ const карта = { a1: "/api/file?id=a1&download=1", a2: "/api/file?id=a2&down
 п("пустой выбор — пустая пачка", адреса([], карта).length === 0,
   String(адреса([], карта).length));
 
+// ── дата съёмки: тумблер в ленте ─────────────────────────────────────────
+// Дату ставит не всегда: иногда кадр нужен галерее «как только что принесли»,
+// по дате загрузки к себе. Выбор человека едет в адрес параметром, а не живёт
+// в панели: файл собирает сервер.
+const сДатой = мир.адресОригинала;
+п("с датой адрес не трогается",
+  сДатой("/api/file?src=moderation:original&id=a1&download=1", true) ===
+    "/tessera/api/file?src=moderation:original&id=a1&download=1",
+  сДатой("/api/file?src=moderation:original&id=a1&download=1", true));
+п("без даты дописывается date=0",
+  сДатой("/api/file?id=a1&download=1", false) === "/tessera/api/file?id=a1&download=1&date=0",
+  сДатой("/api/file?id=a1&download=1", false));
+п("пачка уходит в том же режиме",
+  адреса(["a1"], карта, false)[0] === "/tessera/api/file?id=a1&download=1&date=0",
+  адреса(["a1"], карта, false)[0]);
+п("по умолчанию дата ставится",
+  адреса(["a1"], карта)[0] === "/tessera/api/file?id=a1&download=1",
+  адреса(["a1"], карта)[0]);
+
 console.log(провалы.length ? "\nПРОВАЛЫ: " + провалы.join(", ") : "\nвсё зелено");
 process.exit(провалы.length ? 1 : 0);

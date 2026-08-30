@@ -510,6 +510,13 @@ tr:hover .nm-edit button,.rrow:hover .nm-edit button,.nm-edit button:focus-visib
   font-family:var(--mono);font-size:11px;letter-spacing:.05em;color:var(--ink-3)}
 .shelf-pair b{font-weight:400;color:var(--ink);overflow:hidden;text-overflow:ellipsis}
 .shelf-pair button{padding:2px 9px;line-height:1.2;font-size:13px}
+/* Тумблер даты съёмки стоит в одной строке с плотностью сетки: обе настройки
+   про то, как человек работает с лентой, а не про то, что в ней показано. */
+.shelf-date{display:inline-flex;align-items:center;gap:7px;margin:0 0 14px 18px;
+  font-family:var(--mono);font-size:11px;letter-spacing:.05em;color:var(--ink-3);
+  vertical-align:top;height:34px;cursor:pointer;user-select:none}
+.shelf-date input{width:15px;height:15px;margin:0;accent-color:var(--contrast);cursor:pointer}
+@media (max-width:480px){ .shelf-date{margin-left:0;display:flex} }
 /* Галочка выбора. Кадры одной жалобы набираются десятками, и открывать
    каждый в лайтбоксе ради кнопки «скачать» долго — отметка стоит на плитке.
    Пока курсор не над кадром, галочка не мозолит глаза; там, где курсора нет
@@ -523,6 +530,9 @@ tr:hover .nm-edit button,.rrow:hover .nm-edit button,.nm-edit button:focus-visib
 .shelf .pick[aria-pressed="true"]::after{content:"";position:absolute;left:5px;top:2px;
   width:4px;height:8px;border:solid var(--panel);border-width:0 2px 2px 0;transform:rotate(40deg)}
 .shelf figure.выбран .ph{outline:2px solid var(--contrast);outline-offset:-2px}
+/* Кадр, на котором человека прервали. Подсветка живёт две секунды: без неё
+   непонятно, почему лента открылась посреди себя, а не с начала. */
+.shelf figure.вернулись .ph{outline:2px solid var(--accent);outline-offset:-2px}
 /* Маячок догрузки: место, за которым лента дописывается снизу. Пустой он
    ничего не занимает, кроме высоты строки, — говорит только в работе. */
 .shelf-more{min-height:22px;margin-top:12px;text-align:center;font-family:var(--mono);

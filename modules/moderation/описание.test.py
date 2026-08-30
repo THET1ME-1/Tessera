@@ -159,6 +159,24 @@ class ПриСкачивании(unittest.TestCase):
         self.assertEqual(прочитать(ответ["path"], "Description")["Description"],
                          "r61edc1c99483f6")
 
+    def test_без_даты_если_попросили(self):
+        # Тумблер в ленте: дату съёмки ставим не всегда. Выключен — файл уходит
+        # с описанием и местом, но без даты, и галерея кладёт его по дате
+        # загрузки к себе.
+        ответ = main.оригинал({"id": "abc123", "date": "0"})
+        в_файле = прочитать(ответ["path"], "Description", "DateTimeOriginal")
+        self.assertEqual(в_файле.get("Description"), "r61edc1c99483f6")
+        self.assertIsNone(в_файле.get("DateTimeOriginal"))
+
+    def test_копии_с_датой_и_без_не_путаются(self):
+        # Копия живёт сутки и отдаётся повторно. Если бы имя не различало
+        # режимы, переключённый тумблер возвращал бы вчерашний файл.
+        с_датой = main.оригинал({"id": "abc123"})["path"]
+        без_даты = main.оригинал({"id": "abc123", "date": "0"})["path"]
+        self.assertNotEqual(с_датой, без_даты)
+        self.assertIsNotNone(прочитать(с_датой, "DateTimeOriginal").get("DateTimeOriginal"))
+        self.assertIsNone(прочитать(без_даты, "DateTimeOriginal").get("DateTimeOriginal"))
+
     def test_имя_и_тип_не_меняются_от_подписи(self):
         ответ = main.оригинал({"id": "abc123"})
         self.assertEqual(ответ["name"], "memory_1786968914693_x.webp")
