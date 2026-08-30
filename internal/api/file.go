@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -62,6 +63,10 @@ func (a *API) file(w http.ResponseWriter, r *http.Request) {
 	var ответ struct {
 		Path string `json:"path"`
 		Type string `json:"type"`
+		// Имя, под которым файл сохранится у модератора. Файл на диске зовётся
+		// как придётся — временной копией из бакета, миниатюрой с размером в
+		// имени, — а человеку нужно исходное имя загрузки.
+		Name string `json:"name"`
 	}
 
 	// Готовый путь модуль может назвать заранее — прямо в ленте, вместе с
@@ -76,6 +81,7 @@ func (a *API) file(w http.ResponseWriter, r *http.Request) {
 	if готовый := r.URL.Query().Get("path"); готовый != "" {
 		ответ.Path = готовый
 		ответ.Type = r.URL.Query().Get("type")
+		ответ.Name = r.URL.Query().Get("name")
 	} else {
 		raw, err := modules.Query(*m, filepath.Join(a.modulesDir, m.ID), ключ, параметры)
 		if err != nil {
@@ -114,6 +120,17 @@ func (a *API) file(w http.ResponseWriter, r *http.Request) {
 
 	if ответ.Type != "" {
 		w.Header().Set("Content-Type", ответ.Type)
+	}
+	// Просьба скачать: браузер сохранит файл, а не откроет его во вкладке.
+	// Имя приходит из чужого хранилища, поэтому в заголовок оно попадает
+	// только процеженным — кавычка или перевод строки иначе разорвали бы его.
+	if r.URL.Query().Get("download") != "" {
+		имя := ответ.Name
+		if имя == "" {
+			имя = св.Name()
+		}
+		w.Header().Set("Content-Disposition",
+			"attachment; filename*=UTF-8''"+url.PathEscape(имя))
 	}
 	// Кадры не меняются, поэтому браузеру можно их держать; приватность
 	// бережёт private — общий кэш чужие снимки хранить не должен.

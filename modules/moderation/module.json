@@ -64,6 +64,9 @@
     "_комментарий": "База открывается только на чтение. Миниатюры делает генератор приложения: крон греет свежие пачкой, а промах модуль закрывает вызовом «make --ids», иначе только что загруженный кадр не показать вовсе.",
     "db": "/opt/pocketbase/pb_data/data.db",
     "thumb": "/opt/pocketbase/pb_data/thumb_cache/{id}_{w}.webp",
+    "_комментарий_оригинал": "Исходники переехали в бакет, папки storage на диске больше нет — она остаётся в настройках на случай отката. Выкачкой занимается pb_storage.py приложения: там имя бакета и ключи, в репозиторий модуля им нельзя.",
+    "storage": "/opt/pocketbase/pb_data/storage",
+    "pbstorage": "/opt/pocketbase/tools/pb_storage.py",
     "make": [
       "/opt/pocketbase/tools/thumb_cache.py"
     ],

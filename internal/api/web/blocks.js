@@ -234,6 +234,85 @@ function давность(ts) {
  * Единственная заготовка, которая ходит на сервер сама: собрать двести тысяч
  * файлов заранее нельзя, страницы приходят по требованию. Источник блока
  * подставляется в /api/query, оттуда же берутся фильтры и число страниц. */
+
+/* Что из памяти блока уходит на сервер. Плотность сетки сюда не входит: она
+   меняет размер кадров в браузере, а не набор файлов. */
+const ФИЛЬТРЫ_ЛЕНТЫ = ["kind", "adult", "group"];
+
+function ссылкаЛенты(src, страница) {
+  const моё = память(src);
+  let ссылка = адрес("/api/query") + "?src=" + encodeURIComponent(src) +
+    "&page=" + (страница === undefined ? (моё.page || 0) : страница);
+  for (const имя of ФИЛЬТРЫ_ЛЕНТЫ) {
+    if (моё[имя]) ссылка += "&" + имя + "=" + encodeURIComponent(моё[имя]);
+  }
+  return ссылка;
+}
+
+/* Забрать страницу ленты и нарисовать её. Живёт отдельно от блока, потому что
+   ленту просит не только её собственная листалка: поиск нашёл пару — и
+   отправляет ленту к файлам этой пары. */
+async function загрузитьЛенту(host, src, блок) {
+  host.innerHTML = '<p class="block-empty">Загружаю ленту…</p>';
+  try {
+    блокShelf(host, await взять(ссылкаЛенты(src)), блок);
+  } catch (e) {
+    пусто(host, "лента не пришла: " + e.message);
+  }
+}
+
+/* Один блок отправляет другой за новыми данными: поиск нашёл пару — лента
+   показывает её файлы. Кто кого просит, решает модуль в своём ответе, поэтому
+   панель только ищет нужный блок среди тех, что стоят на вкладке. */
+async function открытьВБлоке(src, изменения) {
+  const i = (state.блоки || []).findIndex(b => b.src === src);
+  const host = i < 0 ? null : $("блок-" + i);
+  if (!host) {
+    // Блок могли убрать в настройке вкладки — тогда переходить некуда, и
+    // молчаливое бездействие читается как сломанная кнопка.
+    сказать("на этой вкладке нет блока, который это покажет");
+    return;
+  }
+  Object.assign(память(src), изменения);
+  await загрузитьЛенту(host, src, state.блоки[i]);
+  const секция = host.closest("section");
+  if (секция) секция.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+/* Разметка одного кадра ленты. Отдельной функцией, потому что её зовёт и
+   первая отрисовка, и догрузка следующей страницы. */
+function разметкаКадра(it, i, выбран) {
+  return '<figure data-i="' + i + '" data-id="' + текстом(it.id) + '"' +
+      (выбран ? ' class="выбран"' : "") + '><div class="ph' + (it.video ? " vid" : "") +
+      (it.adult ? " adult" : "") + '">' +
+    // Адрес обязательно через адрес(): модуль отдаёт путь от корня панели,
+    // а панель живёт в подпапке (/tessera/). Без этого браузер уходил на
+    // корень домена и получал пустоту — лента стояла без единого кадра.
+    '<img loading="lazy" src="' + адрес(it.url) + '" alt="' + (it.caption || "кадр") + '"' +
+    ' onerror="this.closest(&quot;.ph&quot;).classList.add(&quot;нет&quot;)">' +
+    // Галочка стоит только там, где есть что скачивать: у кадра без исходника
+    // выбор ничего не даст. Отдельной кнопкой, а не щелчком по плитке, —
+    // щелчок открывает кадр, и совмещать эти два действия нельзя.
+    (it.download ? '<button class="pick" data-pick aria-pressed="' +
+      (выбран ? "true" : "false") + '" title="Выбрать кадр" aria-label="Выбрать кадр"></button>' : "") +
+    "</div><figcaption>" + (it.caption || "") +
+      (it.ts ? " · " + давность(it.ts) : "") + "</figcaption>" +
+    // id пары — то, с чем модератор уходит в поиск, в переписку и в поддержку.
+    // Поэтому он не подпись, а кнопка: щелчок кладёт его в буфер.
+    (it.group ? '<button class="pair-id" data-pair="' + it.group +
+      '" title="Скопировать id пары">' + it.group + "</button>" : "") +
+    "</figure>";
+}
+
+/* Адреса оригиналов копятся отдельно от кадров: пачку скачивают из выбора, а
+   в нём лежат и кадры страниц, которых на экране уже нет. */
+function запомнитьАдреса(items, карта) {
+  (items || []).forEach(it => {
+    if (it && it.id && it.download) карта[it.id] = it.download;
+  });
+  return карта;
+}
+
 function блокShelf(host, d, блок) {
   const src = (блок && блок.src) || "";
   const моё = память(src);
@@ -244,6 +323,9 @@ function блокShelf(host, d, блок) {
   const виды = d.kinds || [];
 
   const замок = моё.adult || "";
+  // Пару берём из ответа: фильтр мог поставить не этот блок, а поиск рядом.
+  const пара = d.group || моё.group || "";
+  моё.group = пара;
 
   const фильтры = '<div class="seg shelf-filter" role="group" aria-label="Вид файла">' +
     '<button data-kind=""' + (вид ? "" : ' aria-pressed="true"') + ">Все</button>" +
@@ -263,35 +345,54 @@ function блокShelf(host, d, блок) {
     // «как было». Число подставляется после вставки в DOM, когда потолок
     // известен.
     '<label class="shelf-cols">в ряд<input type="range" min="1" step="1" value="1"' +
-      ' aria-label="Кадров в ряд"><b></b></label>';
+      ' aria-label="Кадров в ряд"><b></b></label>' +
+    // Пару ставит поиск, поэтому лента обязана сказать, что показывает не всё:
+    // без плашки «пусто» на редкой паре читается как поломка ленты.
+    (пара ? '<div class="shelf-pair">файлы пары <b>' + текстом(пара) +
+      '</b><button class="ghost-btn" data-pair-off title="Показать всю ленту">' +
+      "×</button></div>" : "");
 
-  const кадры = items.map((it, i) =>
-    '<figure data-i="' + i + '"><div class="ph' + (it.video ? " vid" : "") +
-      (it.adult ? " adult" : "") + '">' +
-      // Адрес обязательно через адрес(): модуль отдаёт путь от корня панели,
-      // а панель живёт в подпапке (/tessera/). Без этого браузер уходил на
-      // корень домена и получал пустоту — лента стояла без единого кадра.
-      '<img loading="lazy" src="' + адрес(it.url) + '" alt="' + (it.caption || "кадр") + '"' +
-      ' onerror="this.closest(&quot;.ph&quot;).classList.add(&quot;нет&quot;)">' +
-    "</div><figcaption>" + (it.caption || "") +
-      (it.ts ? " · " + давность(it.ts) : "") + "</figcaption>" +
-    // id пары — то, с чем модератор уходит в поиск, в переписку и в поддержку.
-    // Поэтому он не подпись, а кнопка: щелчок кладёт его в буфер.
-    (it.group ? '<button class="pair-id" data-pair="' + it.group +
-      '" title="Скопировать id пары">' + it.group + "</button>" : "") +
-    "</figure>").join("");
+  // Выбор живёт в памяти блока: он переживает и догрузку страниц, и смену
+  // фильтра. Модератор собирает кадры одной жалобы из разных углов ленты, и
+  // терять набор на каждом щелчке по фильтру нельзя.
+  моё.выбор = моё.выбор || [];
+  моё.адреса = моё.адреса || {};
+  запомнитьАдреса(items, моё.адреса);
+
+  // Кадры копятся: догруженная страница дописывается сюда, и лайтбокс листает
+  // всё, что человек уже видел, а не одну первую страницу.
+  const показанные = items.slice();
+
+  const кадры = items.map((it, i) => разметкаКадра(it, i, моё.выбор.includes(it.id))).join("");
 
   const листалка = '<div class="shelf-nav">' +
     '<button class="ghost-btn" data-page="' + (стр - 1) + '"' + (стр <= 0 ? " disabled" : "") +
       ">Назад</button>" +
-    '<span class="lbl">страница ' + (стр + 1) + " из " + fmt(d.pages || 1) +
+    // Номер — поле, а не подпись: страниц тут тысячи, и стрелками до конца
+    // июня не дойти. Ширина считается по числу цифр, чтобы поле не висело
+    // пустым полем ввода посреди строки.
+    '<span class="lbl">страниц<span class="shelf-shown"></span> <input class="shelf-page"' +
+      ' type="text" inputmode="numeric"' +
+      ' value="' + (стр + 1) + '" size="' + String(d.pages || 1).length +
+      '" aria-label="Номер страницы"> из ' + fmt(d.pages || 1) +
       " · всего " + fmt(d.total || 0) + " файлов</span>" +
     '<button class="ghost-btn" data-page="' + (стр + 1) + '"' +
       ((d.pages && стр + 1 >= d.pages) ? " disabled" : "") + ">Дальше</button></div>";
 
+  // Маячок под сеткой: как только он показался на экране, снизу дописывается
+  // следующая страница. Кнопка «Дальше» остаётся — прокруткой до конца июня
+  // не добраться, туда прыгают по номеру.
+  const маячок = items.length ? '<div class="shelf-more" aria-live="polite"></div>' : "";
+
+  // Полоса выбора висит внизу и появляется, только когда что-то выбрано.
+  const полоса = '<div class="shelf-pick" hidden>' +
+    '<span class="lbl">Выбрано <b></b></span>' +
+    '<button class="ghost-btn" data-pack>Скачать оригиналы</button>' +
+    '<button class="ghost-btn" data-pick-off>Снять выбор</button></div>';
+
   host.innerHTML = фильтры +
     (items.length ? '<div class="shelf">' + кадры + "</div>" : '<p class="block-empty">пусто</p>') +
-    листалка +
+    маячок + листалка + полоса +
     '<p class="block-note">Порядок — по загрузке в хранилище, а не по дате внутри записи: ' +
     "дату загрузивший может подвинуть. Кадры чужие, поэтому наружу они не уходят.</p>";
 
@@ -300,16 +401,7 @@ function блокShelf(host, d, блок) {
     // к началу — человек листал ленту, а его выбрасывало наверх, к шапке.
     const былоСверху = host.getBoundingClientRect().top;
     host.style.minHeight = host.offsetHeight + "px";
-    host.innerHTML = '<p class="block-empty">Загружаю ленту…</p>';
-    const ссылка = адрес("/api/query") + "?src=" + encodeURIComponent(src) +
-      "&page=" + (моё.page || 0) +
-      (моё.kind ? "&kind=" + encodeURIComponent(моё.kind) : "") +
-      (моё.adult ? "&adult=" + encodeURIComponent(моё.adult) : "");
-    try {
-      блокShelf(host, await взять(ссылка), блок);
-    } catch (e) {
-      пусто(host, "лента не пришла: " + e.message);
-    }
+    await загрузитьЛенту(host, src, блок);
     host.style.minHeight = "";
     // Возвращаем блок туда, где он был под пальцем.
     const сталоСверху = host.getBoundingClientRect().top;
@@ -323,6 +415,12 @@ function блокShelf(host, d, блок) {
     моё.page = 0;
     перерисовать();
   }));
+  const снять = host.querySelector("[data-pair-off]");
+  if (снять) снять.addEventListener("click", () => {
+    моё.group = "";
+    моё.page = 0;
+    перерисовать();
+  });
   host.querySelectorAll("[data-adult]").forEach(b => b.addEventListener("click", () => {
     моё.adult = b.dataset.adult;
     моё.page = 0;
@@ -354,46 +452,286 @@ function блокShelf(host, d, блок) {
     // Лента пуста — сетки нет, и крутить нечего.
     ползунок.closest(".shelf-cols").remove();
   }
-  // Копирование id пары не должно открывать кадр: щелчок сюда — про пару, а
-  // не про картинку.
-  host.querySelectorAll(".pair-id").forEach(b => b.addEventListener("click", async e => {
-    e.stopPropagation();
-    const id = b.dataset.pair || "";
-    try {
-      await navigator.clipboard.writeText(id);
-      сказать("id пары скопирован");
-    } catch {
-      // Буфер закрыт (панель открыта не по https или права не даны) — тогда
-      // выделяем текст, чтобы человек забрал его сам.
-      const д = document.createRange();
-      д.selectNodeContents(b);
-      const s = window.getSelection();
-      s.removeAllRanges();
-      s.addRange(д);
-      сказать("скопируйте выделенное");
+  // Полоса выбора. Появляется, когда отмечен хоть один кадр, и говорит,
+  // сколько их: «Выбрано 14 кадров».
+  const полосаВыбора = host.querySelector(".shelf-pick");
+  const обновитьПолосу = () => {
+    if (!полосаВыбора) return;
+    полосаВыбора.hidden = моё.выбор.length === 0;
+    полосаВыбора.querySelector("b").textContent = кадровСловом(моё.выбор.length);
+  };
+
+  const отметить = (ид, узел) => {
+    const место = моё.выбор.indexOf(ид);
+    const стал = место < 0;
+    if (стал) моё.выбор.push(ид); else моё.выбор.splice(место, 1);
+    узел.classList.toggle("выбран", стал);
+    const кнопка = узел.querySelector("[data-pick]");
+    if (кнопка) кнопка.setAttribute("aria-pressed", стал ? "true" : "false");
+    обновитьПолосу();
+  };
+
+  // Кадры оживают и при первой отрисовке, и после догрузки следующей
+  // страницы, поэтому обработчики висят одной функцией, а не разбросаны по
+  // блоку.
+  const оживитьКадры = узлы => узлы.forEach(f => {
+    f.addEventListener("click", e => {
+      // Галочка и id пары — свои действия, кадр от них не открывается.
+      if (e.target.closest("[data-pick]")) {
+        отметить(f.dataset.id, f);
+        return;
+      }
+      if (e.target.closest(".pair-id")) return;
+      открытьКадр(показанные, Number(f.dataset.i));
+    });
+    const пара = f.querySelector(".pair-id");
+    if (пара) пара.addEventListener("click", async e => {
+      e.stopPropagation();
+      const id = пара.dataset.pair || "";
+      try {
+        await navigator.clipboard.writeText(id);
+        сказать("id пары скопирован");
+      } catch {
+        // Буфер закрыт (панель открыта не по https или права не даны) — тогда
+        // выделяем текст, чтобы человек забрал его сам.
+        const д = document.createRange();
+        д.selectNodeContents(пара);
+        const s = window.getSelection();
+        s.removeAllRanges();
+        s.addRange(д);
+        сказать("скопируйте выделенное");
+      }
+    });
+  });
+  оживитьКадры(Array.from(host.querySelectorAll(".shelf figure")));
+  обновитьПолосу();
+
+  const снятьВыбор = host.querySelector("[data-pick-off]");
+  if (снятьВыбор) снятьВыбор.addEventListener("click", () => {
+    моё.выбор.length = 0;
+    host.querySelectorAll(".shelf figure.выбран").forEach(f => {
+      f.classList.remove("выбран");
+      const к = f.querySelector("[data-pick]");
+      if (к) к.setAttribute("aria-pressed", "false");
+    });
+    обновитьПолосу();
+  });
+
+  const пачкой = host.querySelector("[data-pack]");
+  if (пачкой) пачкой.addEventListener("click", () => скачатьПачкой(пачкой, моё));
+
+  // Догрузка: маячок под сеткой показался — снизу дописывается следующая
+  // страница. Номер первой показанной страницы остаётся в памяти блока, чтобы
+  // перерисовка после фильтра вернулась туда же, а не в конец догруженного.
+  const показаноТут = host.querySelector(".shelf-shown");
+  let последняя = стр;
+  const обновитьСчёт = () => {
+    if (показаноТут) показаноТут.textContent = "ы " + показаноСтраниц(стр, последняя);
+  };
+  обновитьСчёт();
+
+  const маячокУзел = host.querySelector(".shelf-more");
+  if (маячокУзел && сетка) {
+    let грузим = false;
+    const догрузить = async () => {
+      const следом = следующаяСтраница(последняя, d.pages);
+      if (грузим || следом === null) return;
+      грузим = true;
+      маячокУзел.textContent = "догружаю…";
+      try {
+        const ещё = await взять(ссылкаЛенты(src, следом));
+        const новые = ещё.items || [];
+        const было = показанные.length;
+        показанные.push(...новые);
+        запомнитьАдреса(новые, моё.адреса);
+        сетка.insertAdjacentHTML("beforeend", новые.map(
+          (it, i) => разметкаКадра(it, было + i, моё.выбор.includes(it.id))).join(""));
+        оживитьКадры(Array.from(сетка.children).slice(было));
+        последняя = следом;
+        обновитьСчёт();
+        маячокУзел.textContent = следующаяСтраница(последняя, d.pages) === null
+          ? "лента кончилась" : "";
+      } catch (e) {
+        // Страница не пришла — говорим об этом прямо в ленте. Молчаливый
+        // маячок читается как «файлы кончились», а это не так.
+        маячокУзел.textContent = "не догрузилось: " + e.message;
+      }
+      грузим = false;
+    };
+    if (моё._смотрит) моё._смотрит.disconnect();
+    if (typeof IntersectionObserver === "function") {
+      // Запас в шестьсот пикселей: страница успевает приехать до того, как
+      // человек доскроллит до пустоты.
+      моё._смотрит = new IntersectionObserver(
+        записи => { if (записи.some(з => з.isIntersecting)) догрузить(); },
+        { rootMargin: "600px" });
+      моё._смотрит.observe(маячокУзел);
     }
-  }));
+  }
+
   host.querySelectorAll("[data-page]").forEach(b => b.addEventListener("click", () => {
     if (b.disabled) return;
     моё.page = Number(b.dataset.page);
     перерисовать();
   }));
 
-  // Лайтбокс: кадр крупно, стрелки листают, Esc закрывает.
-  host.querySelectorAll(".shelf figure").forEach(f => f.addEventListener("click", () => {
-    открытьКадр(items, Number(f.dataset.i));
-  }));
+  // Поле номера. Enter переводит, уход из поля — тоже: человек набирает номер
+  // и щёлкает мимо, ожидая перехода. Мусор и та же страница возвращают поле к
+  // текущему номеру, чтобы оно не осталось врать.
+  const номер = host.querySelector(".shelf-page");
+  if (номер) {
+    const перейти = () => {
+      const куда = номерСтраницы(номер.value, d.pages || 1);
+      if (куда === null || куда === стр) {
+        номер.value = String(стр + 1);
+        return;
+      }
+      моё.page = куда;
+      перерисовать();
+    };
+    номер.addEventListener("keydown", e => {
+      if (e.key === "Enter") { e.preventDefault(); перейти(); }
+      // Стрелки листают ленту, а внутри поля они двигают курсор — иначе номер
+      // не поправить, не улетев на соседнюю страницу.
+      e.stopPropagation();
+    });
+    номер.addEventListener("change", перейти);
+    номер.addEventListener("focus", () => номер.select());
+  }
+
+}
+
+/* Какую страницу догружать следующей, когда лента доскроллена до низа.
+ *
+ * Дальше последней грузить нечего: сервер отдаст пустоту, а наблюдатель
+ * продолжит спрашивать её при каждом движении колеса. Число страниц приходит
+ * от модуля и может не прийти вовсе — тогда тоже молчим. */
+function следующаяСтраница(последняя, всегоСтраниц) {
+  const всего = Number(всегоСтраниц) || 0;
+  const эта = Number(последняя) || 0;
+  return эта + 1 < всего ? эта + 1 : null;
+}
+
+/* Подпись листалки: какие страницы сейчас на экране. Долистав до третьей,
+   человек видит «страницы 1–3», а не «страница 1» — иначе непонятно, где он
+   находится и что вообще догрузилось. */
+function показаноСтраниц(первая, последняя) {
+  return последняя > первая ? (первая + 1) + "–" + (последняя + 1) : String(первая + 1);
+}
+
+/* «14 кадров», «21 кадр», «2 кадра». Полоса выбора висит на виду всё время
+   разбора, и «Выбрано 21 кадров» мозолит глаза. */
+function кадровСловом(n) {
+  const сотня = n % 100;
+  const десяток = n % 10;
+  const слово = сотня >= 11 && сотня <= 14 ? "кадров"
+    : десяток === 1 ? "кадр"
+      : десяток >= 2 && десяток <= 4 ? "кадра" : "кадров";
+  return n + " " + слово;
+}
+
+/* Адреса выбранных кадров в том порядке, в каком их отмечали.
+ *
+ * Выбор переживает смену фильтра и догрузку страниц, поэтому в наборе может
+ * остаться кадр, которого в ленте уже нет: адреса у него взять неоткуда, и
+ * такой пропускается молча. */
+function адресаВыбранных(порядок, карта) {
+  return (порядок || []).map(ид => (карта || {})[ид]).filter(Boolean).map(адрес);
+}
+
+/* Пачка оригиналов уходит по одному файлу, а не архивом.
+ *
+ * Архив пришлось бы распаковывать перед заливкой в галерею, а так файлы сразу
+ * ложатся в папку загрузок готовыми. Промежуток между ссылками нужен браузеру:
+ * без него часть загрузок он отбрасывает молча, а сервер получает десяток
+ * выкачек из бакета разом.
+ *
+ * Разрешение на несколько файлов браузер спросит один раз за сеанс. */
+async function скачатьПачкой(кнопка, моё) {
+  const список = адресаВыбранных(моё.выбор, моё.адреса);
+  if (!список.length || кнопка.disabled) return;
+  const надпись = кнопка.textContent;
+  кнопка.disabled = true;
+  for (let i = 0; i < список.length; i++) {
+    кнопка.textContent = "качаю " + (i + 1) + " из " + список.length + "…";
+    const ссылка = document.createElement("a");
+    ссылка.href = список[i];
+    ссылка.download = "";
+    ссылка.rel = "noopener";
+    document.body.appendChild(ссылка);
+    ссылка.click();
+    ссылка.remove();
+    await new Promise(готово => setTimeout(готово, 800));
+  }
+  кнопка.disabled = false;
+  кнопка.textContent = надпись;
+  сказать("ушло " + кадровСловом(список.length));
+}
+
+/* Введённый номер страницы → номер, каким его знает сервер.
+ *
+ * Человек видит страницы с единицы, сервер считает с нуля. Пробелы внутри
+ * числа свои: подпись рядом пишет «из 2 004», и это же значение копируют в
+ * поле. Промах за край прижимается к краю — за последней страницей лежит
+ * пустая лента, и она читается как «файлы кончились».
+ *
+ * Мусор не переводит никуда (null): случайное нажатие не должно уносить с той
+ * страницы, которую человек разбирает. */
+function номерСтраницы(ввод, всего) {
+  const чистый = String(ввод == null ? "" : ввод).replace(/[\s ]/g, "");
+  if (!/^-?\d+$/.test(чистый)) return null;
+  const n = Number(чистый);
+  const край = Math.max(1, Number(всего) || 1);
+  return Math.min(край, Math.max(1, n)) - 1;
+}
+
+/* Адрес того же кадра, но крупного.
+ *
+ * В ленте кадр приходит с готовым `path` к плитке 512: так ядро отдаёт файл,
+ * не поднимая процесс модуля на каждую картинку. Для просмотра во весь экран
+ * этот путь надо снять — увидев его, ядро отдаёт ровно названный файл и
+ * запрошенный размер уже не смотрит, поэтому на весь экран растягивалась
+ * миниатюра. Без пути ядро спросит модуль, а тот назовёт кадр 1600 и при
+ * промахе сделает его на месте. */
+function крупныйКадр(url) {
+  const [путь, запрос = ""] = url.split("?");
+  const параметры = new URLSearchParams(запрос);
+  параметры.delete("path");
+  параметры.delete("type");
+  параметры.set("w", "1600");
+  return адрес(путь + "?" + параметры.toString());
 }
 
 function открытьКадр(items, i) {
   const слой = document.createElement("div");
   слой.className = "light";
   const показать = n => {
-    const it = items[(n + items.length) % items.length];
-    слой.innerHTML = '<img src="' + адрес(it.url) + '&w=1600" alt="">' +
+    const это = (n + items.length) % items.length;
+    const it = items[это];
+    // Кнопку скачивания рисуем по адресу от модуля: панель не знает ни его
+    // ключей, ни того, что у кадра вообще бывает исходник. Нет адреса — нет и
+    // кнопки, и лайтбокс выглядит как раньше.
+    слой.innerHTML = '<img src="' + адрес(it.url) + '" alt="">' +
       '<div class="light-bar"><span class="lbl">' + (it.caption || "") + " · " +
-      (it.group || "") + "</span></div>";
-    слой.dataset.i = String((n + items.length) % items.length);
+      (it.group || "") + "</span>" +
+      (it.download
+        ? '<a class="light-dl" href="' + адрес(it.download) + '" download>Скачать оригинал</a>'
+        : "") +
+      "</div>";
+    слой.dataset.i = String(это);
+    // Клик по слою закрывает кадр, а кнопка лежит внутри слоя: без этой
+    // строки лайтбокс закрывался бы раньше, чем начнётся скачивание.
+    const кнопка = слой.querySelector(".light-dl");
+    if (кнопка) кнопка.addEventListener("click", e => e.stopPropagation());
+    // Плитка уже лежит в кэше браузера и появляется сразу; крупный кадр
+    // подменяет её, когда доедет. Сверяем номер: при быстром листании поздний
+    // ответ не должен подменить кадр, который человек уже пролистнул.
+    const место = слой.querySelector("img");
+    const крупный = new Image();
+    крупный.onload = () => {
+      if (слой.dataset.i === String(это) && место.isConnected) место.src = крупный.src;
+    };
+    крупный.src = крупныйКадр(it.url);
   };
   показать(i);
   document.body.appendChild(слой);
@@ -409,6 +747,15 @@ function открытьКадр(items, i) {
   };
   addEventListener("keydown", клавиша);
   слой.addEventListener("click", закрыть);
+}
+
+/* Чужой текст в разметке. Имена и почты люди пишут себе сами, а панель
+   собирает строки конкатенацией — без этого имя вида `<img onerror=…>`
+   выполнялось бы прямо в админке. */
+function текстом(v) {
+  return String(v === null || v === undefined ? "" : v)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 }
 
 function пусто(host, текст) {
@@ -441,9 +788,19 @@ function блокSearch(host, d, блок) {
     : (d && (d.rows || []).length ? [{ title: "", cols: d.cols, rows: d.rows }] : []);
 
   const таблица = р => {
-    const шапка = (р.cols || []).map(c => "<th>" + c + "</th>").join("");
+    const шапка = (р.cols || []).map(c => "<th>" + текстом(c) + "</th>").join("");
+    // Модуль вправе пометить колонку, чьё значение является фильтром для
+    // соседнего блока: id пары в результатах поиска уводит ленту к её файлам.
+    const переход = р.link || null;
     const тело = (р.rows || []).map(r =>
-      "<tr>" + r.map(v => "<td>" + (v === null || v === undefined ? "—" : v) + "</td>").join("") + "</tr>"
+      "<tr>" + r.map((v, к) => {
+        const текст = текстом(v === null || v === undefined ? "—" : v);
+        if (!переход || к !== переход.col || !v) return "<td>" + текст + "</td>";
+        return '<td><button class="cell-link" data-link-src="' + текстом(переход.src) +
+          '" data-link-param="' + текстом(переход.param) +
+          '" data-link-val="' + текстом(v) +
+          '" title="' + текстом(переход.title || "Показать") + '">' + текст + "</button></td>";
+      }).join("") + "</tr>"
     ).join("");
     return (р.title ? '<p class="lbl found-title">' + р.title + " · " +
               (р.rows || []).length + "</p>" : "") +
@@ -461,6 +818,11 @@ function блокSearch(host, d, блок) {
   }
 
   host.innerHTML = строка + ответ;
+
+  // Щелчок по помеченной ячейке уводит соседний блок к этому значению.
+  host.querySelectorAll(".cell-link").forEach(b => b.addEventListener("click", () => {
+    открытьВБлоке(b.dataset.linkSrc, { [b.dataset.linkParam]: b.dataset.linkVal, page: 0 });
+  }));
 
   const форма = host.querySelector("form");
   форма.addEventListener("submit", async (e) => {

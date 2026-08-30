@@ -8,3 +8,4 @@ data/
 dist/
 tessera
 .env
+__pycache__/

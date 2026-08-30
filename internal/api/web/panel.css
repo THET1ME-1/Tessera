@@ -503,14 +503,67 @@ tr:hover .nm-edit button,.rrow:hover .nm-edit button,.nm-edit button:focus-visib
   padding:1px 5px;border-radius:3px}
 .shelf figcaption{font-family:var(--mono);font-size:11px;letter-spacing:.05em;color:var(--ink-3);
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* Лента показывает не всё: фильтр по паре ставит поиск, и без этой плашки
+   пустой экран на редкой паре читается как сломанная лента. */
+.shelf-pair{display:flex;align-items:center;gap:9px;margin:0 0 14px;padding:6px 8px 6px 12px;
+  width:max-content;max-width:100%;background:var(--panel-2);border-radius:var(--r);
+  font-family:var(--mono);font-size:11px;letter-spacing:.05em;color:var(--ink-3)}
+.shelf-pair b{font-weight:400;color:var(--ink);overflow:hidden;text-overflow:ellipsis}
+.shelf-pair button{padding:2px 9px;line-height:1.2;font-size:13px}
+/* Галочка выбора. Кадры одной жалобы набираются десятками, и открывать
+   каждый в лайтбоксе ради кнопки «скачать» долго — отметка стоит на плитке.
+   Пока курсор не над кадром, галочка не мозолит глаза; там, где курсора нет
+   вовсе, она видна всегда. */
+.shelf .pick{position:absolute;left:5px;top:5px;z-index:2;width:18px;height:18px;padding:0;
+  border:1px solid var(--line-2);border-radius:3px;background:var(--panel);cursor:pointer;
+  opacity:0}
+.shelf figure:hover .pick,.shelf figure.выбран .pick,.shelf .pick:focus-visible{opacity:1}
+@media (hover:none){ .shelf .pick{opacity:1} }
+.shelf .pick[aria-pressed="true"]{background:var(--contrast);border-color:var(--contrast)}
+.shelf .pick[aria-pressed="true"]::after{content:"";position:absolute;left:5px;top:2px;
+  width:4px;height:8px;border:solid var(--panel);border-width:0 2px 2px 0;transform:rotate(40deg)}
+.shelf figure.выбран .ph{outline:2px solid var(--contrast);outline-offset:-2px}
+/* Маячок догрузки: место, за которым лента дописывается снизу. Пустой он
+   ничего не занимает, кроме высоты строки, — говорит только в работе. */
+.shelf-more{min-height:22px;margin-top:12px;text-align:center;font-family:var(--mono);
+  font-size:11px;letter-spacing:.05em;color:var(--ink-3)}
+/* Полоса выбора липнет к низу окна: набор собирается по всей ленте, и кнопка
+   скачивания обязана оставаться под рукой, а не уезжать вверх с прокруткой. */
+.shelf-pick{position:sticky;bottom:12px;z-index:5;display:flex;align-items:center;gap:12px;
+  margin-top:14px;padding:8px 12px;background:var(--panel-2);border:1px solid var(--line);
+  border-radius:var(--r)}
+.shelf-pick .lbl{margin-right:auto;font-family:var(--mono);font-size:11px;letter-spacing:.05em;
+  color:var(--ink-3)}
+.shelf-pick b{font-weight:400;color:var(--ink)}
+.shelf-pick button[disabled]{opacity:.5;cursor:default}
+@media (max-width:480px){ .shelf-pick{flex-wrap:wrap;gap:8px}
+  .shelf-pick .lbl{width:100%;margin-right:0} }
+/* Ячейка-вход: значение в таблице, которым открывается соседний блок. */
+.cell-link{font:inherit;color:var(--ink);background:none;border:none;padding:0;
+  text-align:left;cursor:pointer;border-bottom:1px dashed var(--line-2)}
+.cell-link:hover{border-bottom-color:var(--ink)}
 .shelf-nav{display:flex;align-items:center;gap:12px;margin-top:14px}
 .shelf-nav .lbl{margin:0 auto}
 .shelf-nav button[disabled]{opacity:.4;cursor:default}
+/* Номер страницы вводится руками: подчёркивание вместо рамки — поле стоит
+   внутри подписи, и коробка вокруг него разорвала бы строку надвое. */
+.shelf-page{font:inherit;letter-spacing:inherit;color:var(--ink);background:none;
+  border:0;border-bottom:1px solid var(--line);border-radius:0;
+  padding:0 2px;margin:0 1px;text-align:center;min-width:2.5ch}
+.shelf-page:hover{border-bottom-color:var(--ink-3)}
+.shelf-page:focus-visible{outline:none;border-bottom-color:var(--ink);color:var(--ink)}
 .light{position:fixed;inset:0;background:rgba(0,0,0,.86);z-index:90;display:flex;
   align-items:center;justify-content:center;cursor:zoom-out;padding:24px}
 .light img{max-width:100%;max-height:88vh;object-fit:contain;border-radius:var(--r)}
-.light-bar{position:absolute;left:0;right:0;bottom:0;padding:14px 20px;text-align:center}
+.light-bar{position:absolute;left:0;right:0;bottom:0;padding:14px 20px;
+  display:flex;align-items:center;justify-content:center;gap:16px;flex-wrap:wrap}
 .light-bar .lbl{color:#c9c9c2}
+/* Скачивание оригинала. Рамка вместо заливки: под кнопкой лежит чужой снимок,
+   и плашка светлее фона отбирала бы у него внимание. */
+.light-dl{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;
+  color:#c9c9c2;border:1px solid rgba(201,201,194,.34);border-radius:var(--r);
+  padding:6px 12px;cursor:pointer;white-space:nowrap;text-decoration:none}
+.light-dl:hover{color:#fff;border-color:rgba(255,255,255,.62)}
 @media (max-width:1080px){ .shelf{--cols-auto:6} }
 @media (max-width:680px){ .shelf{--cols-auto:3} }
 /* На телефоне кадр важнее числа кадров: модератор смотрит, что на снимке,
