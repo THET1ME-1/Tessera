@@ -2,37 +2,92 @@
   "id": "income",
   "name": "Доход",
   "version": "1.0.0",
-  "run": ["python3", "main.py"],
+  "run": [
+    "python3",
+    "main.py"
+  ],
   "every": "20m",
-
   "tabs": [
     {
       "id": "income",
       "title": "Доход",
       "blocks": [
-        { "type": "stat",    "title": "За месяц",           "span": 6, "src": "income:month" },
-        { "type": "stat",    "title": "Сегодня",            "span": 3, "src": "income:today" },
-        { "type": "stat",    "title": "Вчера",              "span": 3, "src": "income:yesterday" },
-
-        { "type": "table",   "title": "Источники",          "span": 7, "src": "income:sources" },
-        { "type": "stat",    "title": "Продано доступа",    "span": 5, "src": "income:sold" },
-
-        { "type": "columns", "title": "По месяцам",         "span": 12, "src": "income:history" },
-
-        { "type": "raster",  "title": "География рекламы",  "span": 7, "src": "income:geo" },
-        { "type": "list",    "title": "Реклама по системам","span": 5, "src": "income:os" },
-
-        { "type": "stat",    "title": "За год",             "span": 4, "src": "income:year" },
-        { "type": "note",    "title": "Оговорки источников","span": 8, "src": "income:notes" }
+        {
+          "type": "stat",
+          "title": "Доход за период",
+          "span": 6,
+          "src": "income:month",
+          "ranged": true
+        },
+        {
+          "type": "stat",
+          "title": "Сегодня",
+          "span": 3,
+          "src": "income:today"
+        },
+        {
+          "type": "stat",
+          "title": "Вчера",
+          "span": 3,
+          "src": "income:yesterday"
+        },
+        {
+          "type": "table",
+          "title": "Источники",
+          "span": 7,
+          "src": "income:sources"
+        },
+        {
+          "type": "stat",
+          "title": "Продано доступа",
+          "span": 5,
+          "src": "income:sold"
+        },
+        {
+          "type": "columns",
+          "title": "По месяцам",
+          "span": 12,
+          "src": "income:history"
+        },
+        {
+          "type": "raster",
+          "title": "География рекламы",
+          "span": 7,
+          "src": "income:geo"
+        },
+        {
+          "type": "list",
+          "title": "Реклама по системам",
+          "span": 5,
+          "src": "income:os"
+        },
+        {
+          "type": "stat",
+          "title": "За год",
+          "span": 4,
+          "src": "income:year"
+        },
+        {
+          "type": "note",
+          "title": "Оговорки источников",
+          "span": 8,
+          "src": "income:notes"
+        }
       ]
     }
   ],
-
   "tiles": [
-    { "type": "stat", "title": "Доход за месяц", "src": "income:month" },
-    { "type": "stat", "title": "Доход сегодня",  "src": "income:today" }
+    {
+      "type": "stat",
+      "title": "Доход за месяц",
+      "src": "income:month"
+    },
+    {
+      "type": "stat",
+      "title": "Доход сегодня",
+      "src": "income:today"
+    }
   ],
-
   "files": {
     "_комментарий": "Сводки кладёт отдельный сбор по расписанию. Модуль только читает их и превращает в блоки.",
     "summary": "/opt/pocketbase/pb_data/.income.json",
