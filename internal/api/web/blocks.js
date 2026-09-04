@@ -237,7 +237,7 @@ function давность(ts) {
 
 /* Что из памяти блока уходит на сервер. Плотность сетки сюда не входит: она
    меняет размер кадров в браузере, а не набор файлов. */
-const ФИЛЬТРЫ_ЛЕНТЫ = ["kind", "adult", "group"];
+const ФИЛЬТРЫ_ЛЕНТЫ = ["kind", "fmt", "adult", "group"];
 
 function ссылкаЛенты(src, страница) {
   const моё = память(src);
@@ -334,7 +334,7 @@ function блокShelf(host, d, блок) {
   if (моё.page === undefined) {
     моё._вернуться = применитьМесто(моё, вспомнитьМесто(src)) || "";
     моё.page = моё.page || 0;
-    if (моё.page || моё.kind || моё.adult || моё.group) {
+    if (моё.page || моё.kind || моё.fmt || моё.adult || моё.group) {
       загрузитьЛенту(host, src, блок);
       return;
     }
@@ -346,6 +346,9 @@ function блокShelf(host, d, блок) {
   const items = d.items || [];
   const виды = d.kinds || [];
 
+  const формат = моё.fmt || "";
+  const форматы = d.formats || [];
+
   const замок = моё.adult || "";
   // Пару берём из ответа: фильтр мог поставить не этот блок, а поиск рядом.
   const пара = d.group || моё.group || "";
@@ -355,6 +358,16 @@ function блокShelf(host, d, блок) {
     '<button data-kind=""' + (вид ? "" : ' aria-pressed="true"') + ">Все</button>" +
     виды.map(k => '<button data-kind="' + k + '"' +
       (k === вид ? ' aria-pressed="true"' : "") + ">" + k + "</button>").join("") + "</div>" +
+    // Формат отдельно от вида: mp4 лежит и в «Воспоминаниях», и в
+    // «Виджетах», а «Голосовые» — это и m4a, и ogg. Роликов меньше процента,
+    // и без своей кнопки до них не долистать.
+    (форматы.length
+      ? '<div class="seg shelf-filter" role="group" aria-label="Формат файла">' +
+        '<button data-fmt=""' + (формат ? "" : ' aria-pressed="true"') + ">Любой</button>" +
+        форматы.map(ф => '<button data-fmt="' + ф + '"' +
+          (ф === формат ? ' aria-pressed="true"' : "") + ">" + ф + "</button>").join("") +
+        "</div>"
+      : "") +
     // Замок ставит сама пара в приложении, модерация его только видит. Своей
     // строкой, а не среди видов: вид и возрастная пометка — разные вопросы, и
     // спрашивают их вместе («холсты, где стоит замок»).
@@ -450,6 +463,11 @@ function блокShelf(host, d, блок) {
     моё.page = 0;
     перерисовать();
   });
+  host.querySelectorAll("[data-fmt]").forEach(b => b.addEventListener("click", () => {
+    моё.fmt = b.dataset.fmt;
+    моё.page = 0;
+    перерисовать();
+  }));
   host.querySelectorAll("[data-adult]").forEach(b => b.addEventListener("click", () => {
     моё.adult = b.dataset.adult;
     моё.page = 0;
@@ -547,7 +565,8 @@ function блокShelf(host, d, блок) {
         запомнитьМесто(src, {
           page: страницаКадра(стр, i, items.length || 60),
           id: узлы[i].dataset.id || "",
-          kind: моё.kind || "", adult: моё.adult || "", group: моё.group || "",
+          kind: моё.kind || "", fmt: моё.fmt || "",
+          adult: моё.adult || "", group: моё.group || "",
         });
         return;
       }
@@ -747,6 +766,7 @@ function применитьМесто(моё, место) {
   if (!место || моё.page !== undefined) return null;
   моё.page = Number(место.page) || 0;
   if (место.kind !== undefined) моё.kind = место.kind;
+  if (место.fmt !== undefined) моё.fmt = место.fmt;
   if (место.adult !== undefined) моё.adult = место.adult;
   if (место.group !== undefined) моё.group = место.group;
   return место.id || "";
