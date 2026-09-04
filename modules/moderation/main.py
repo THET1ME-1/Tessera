@@ -495,14 +495,20 @@ def прогреть(кадры, ист, ждать=False):
         print(f"генератор миниатюр не отозвался: {e}", file=sys.stderr)
 
 
-def кадры_записи(первый, остальные):
+def кадры_записи(первый, остальные, ролик=""):
     """Все ссылки на файлы одного воспоминания, обложка первой.
 
     Одиночный снимок лежит в `imageUrl`, альбом — в `imageUrls`, и обложка
     альбома обычно повторяется в списке. Порядок сохраняем: он же порядок
     кадров в приложении.
+
+    Ролик живёт в своём поле `videoUrl`, а `imageUrl` держит его превью.
+    Пока читались только картиночные поля, в ленте 18+ не было ни одного
+    ролика: 182 помеченные записи проходили мимо, и «Видео» под замком
+    показывало пустую ленту.
     """
-    ссылки = ([первый] if первый else []) + list(остальные or [])
+    ссылки = ([первый] if первый else []) + list(остальные or []) + \
+        ([ролик] if ролик else [])
     return [с for с in dict.fromkeys(ссылки) if с]
 
 
@@ -531,14 +537,15 @@ def кадры_с_замком():
         with pg.cursor() as cur:
             cur.execute("SET LOCAL statement_timeout = 8000")
             cur.execute(
-                "SELECT data::jsonb ->> 'imageUrl', data::jsonb -> 'imageUrls' "
+                "SELECT data::jsonb ->> 'imageUrl', data::jsonb -> 'imageUrls', "
+                "       data::jsonb ->> 'videoUrl' "
                 "FROM memories "
                 "WHERE (data::jsonb ->> 'isAdult') = 'true' "
                 "  AND coalesce(deleted, false) = false "
                 "ORDER BY created_at DESC")
             ряд = []
-            for один, много in cur.fetchall():
-                for ссылка in кадры_записи(один, много):
+            for один, много, ролик in cur.fetchall():
+                for ссылка in кадры_записи(один, много, ролик):
                     ид = ид_из_ссылки(ссылка)
                     if ид:
                         ряд.append(ид)
@@ -633,14 +640,15 @@ def взрослые_для(группы):
         with pg.cursor() as cur:
             cur.execute("SET LOCAL statement_timeout = 4000")
             cur.execute(
-                "SELECT data::jsonb ->> 'imageUrl', data::jsonb -> 'imageUrls' "
+                "SELECT data::jsonb ->> 'imageUrl', data::jsonb -> 'imageUrls', "
+                "       data::jsonb ->> 'videoUrl' "
                 "FROM memories "
                 "WHERE group_id = ANY(%s) "
                 "  AND (data::jsonb ->> 'isAdult') = 'true' "
                 "  AND coalesce(deleted, false) = false", (группы,))
             найдено = set()
-            for один, много in cur.fetchall():
-                for ссылка in кадры_записи(один, много):
+            for один, много, ролик in cur.fetchall():
+                for ссылка in кадры_записи(один, много, ролик):
                     ид = ид_из_ссылки(ссылка)
                     if ид:
                         найдено.add(ид)
@@ -1307,7 +1315,7 @@ def помечено_18(параметры):
             аргументы = (пара,) if пара else ()
             cur.execute(
                 "SELECT group_id, data::jsonb ->> 'imageUrl', "
-                "       data::jsonb -> 'imageUrls', "
+                "       data::jsonb -> 'imageUrls', data::jsonb ->> 'videoUrl', "
                 "       data::jsonb ->> 'authorName', created_at "
                 "FROM memories "
                 "WHERE (data::jsonb ->> 'isAdult') = 'true' "
@@ -1320,8 +1328,8 @@ def помечено_18(параметры):
     ист, _ = настройки()
     элементы = []
     видели = set()
-    for группа, один, много, автор, когда in строки:
-        for ссылка in кадры_записи(один, много):
+    for группа, один, много, ролик, автор, когда in строки:
+        for ссылка in кадры_записи(один, много, ролик):
             куски = (ссылка or "").split("/")
             if len(куски) < 5 or not куски[0].startswith("pb:"):
                 continue

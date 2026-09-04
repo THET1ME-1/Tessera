@@ -36,6 +36,18 @@ class СсылкиЗаписи(unittest.TestCase):
                                            ["pb://media/а/а.jpg"]),
                          ["pb://media/о/о.jpg", "pb://media/а/а.jpg"])
 
+    def test_ролик_записи_попадает_в_ленту(self):
+        # У воспоминания с роликом ссылка лежит в отдельном поле videoUrl, а
+        # imageUrl держит превью. Пока читали только картиночные поля, в ленте
+        # 18+ не было ни одного ролика: 182 записи проходили мимо.
+        self.assertEqual(
+            main.кадры_записи("pb://media/о/о.jpg", None, "pb://media/в/в.mp4"),
+            ["pb://media/о/о.jpg", "pb://media/в/в.mp4"])
+
+    def test_ролик_без_обложки(self):
+        self.assertEqual(main.кадры_записи("", None, "pb://media/в/в.mp4"),
+                         ["pb://media/в/в.mp4"])
+
     def test_обложка_из_альбома_не_двоится(self):
         альбом = ["pb://media/о/о.jpg", "pb://media/а/а.jpg"]
         self.assertEqual(main.кадры_записи("pb://media/о/о.jpg", альбом), альбом)
