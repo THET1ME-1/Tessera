@@ -21,6 +21,11 @@
 const panel = (cls, inner) => '<section class="panel ' + cls + '">' + inner + "</section>";
 const head = (l, r = "") => '<div class="panel-head"><span class="lbl">' + l + "</span>" + (r ? '<span class="lbl">' + r + "</span>" : "") + "</div>";
 
+/* Подпись периода берётся из выбранной кнопки, а не пишется в блоке числом:
+   иначе «за 30 дней» остаётся стоять и когда открыты семь суток. */
+const периодСловами = () => ({ "7d": "7 суток", "15d": "15 суток",
+                               "30d": "30 суток", all: "всё время" })[state.range] || state.range;
+
 function viewOverview() {
   const dd = DATA.days || [];
   const key = state.людиСчитаются ? "nw" : "events";
@@ -101,7 +106,7 @@ function viewOverview() {
     ) +
 
     panel("c5",
-      head("Версии", "люди за 30 дней") +
+      head("Версии", "сборка человека · " + периодСловами()) +
       versionsList(DATA.versions.slice(0, 6)) +
       '<div style="margin-top:22px;padding-top:18px;border-top:1px solid var(--line)">' +
         '<span class="lbl" style="display:block;margin-bottom:12px">Платформы</span>' +
@@ -423,7 +428,7 @@ function viewVersions() {
   const pTotal = DATA.platforms.reduce((s, p) => s + p.u, 0);
   document.getElementById("view").innerHTML = '<div class="grid">' +
     panel("c7",
-      head("Версии в бою", "люди за 30 дней") +
+      head("Версии в бою", "последняя сборка человека · " + периодСловами()) +
       '<div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Сборка</th><th class="barcell">Доля</th>' +
       '<th class="r">Людей</th><th class="r">Событий</th><th class="r">Доля</th></tr></thead><tbody>' +
       DATA.versions.map(v => '<tr><td class="name">' + v.v + "</td>" +
@@ -431,12 +436,14 @@ function viewVersions() {
         '<td class="r">' + fmt(v.u) + '</td><td class="r">' + fmt(v.e) + '</td>' +
         '<td class="r">' + pctS(v.u, total) + "</td></tr>").join("") +
       "</tbody></table></div>" +
-      '<p style="font-size:12px;color:var(--ink-3);margin:14px 0 0">На свежую 1.26.0 перешли ' +
-      pctS(DATA.versions.filter(v => v.v.startsWith("1.26")).reduce((s, v) => s + v.u, 0), total, 0) +
+      '<p style="font-size:12px;color:var(--ink-3);margin:14px 0 0">Человек считается один раз, ' +
+      'по той сборке, с которой его видели последним. На самой ходовой (' +
+      ((DATA.versions[0] || {}).v || "—") + ') сидят ' +
+      pctS(((DATA.versions[0] || {}).u || 0), total, 0) +
       ' людей. Сборки с номером за 2000 — внутренние прогоны CI.</p>'
     ) +
     panel("c5",
-      head("Платформы", "люди за 30 дней") +
+      head("Платформы", "люди · " + периодСловами()) +
       '<div style="display:flex;gap:2px;margin-bottom:14px">' +
         DATA.platforms.map((p, i) => '<div style="flex:' + p.u + ';height:44px;border-radius:var(--r);background:' +
           (i === 0 ? "var(--serie-1)" : "var(--serie-2)") + '"></div>').join("") +

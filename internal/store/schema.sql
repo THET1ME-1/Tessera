@@ -44,6 +44,7 @@ CREATE TABLE IF NOT EXISTS seen (
   day      TEXT NOT NULL,
   who      TEXT NOT NULL,
   platform TEXT,
+  version  TEXT,
   PRIMARY KEY (app, day, who)
 );
 
@@ -75,6 +76,7 @@ CREATE TABLE IF NOT EXISTS versions (
   day     TEXT NOT NULL,
   version TEXT NOT NULL,
   people  INTEGER NOT NULL DEFAULT 0,
+  hits    INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (app, day, version)
 );
 

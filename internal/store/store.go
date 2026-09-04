@@ -69,6 +69,8 @@ func Open(path string) (*Store, error) {
 func доправить(db *sql.DB) error {
 	правки := []string{
 		`ALTER TABLE seen ADD COLUMN platform TEXT`,
+		`ALTER TABLE seen ADD COLUMN version TEXT`,
+		`ALTER TABLE versions ADD COLUMN hits INTEGER NOT NULL DEFAULT 0`,
 	}
 	for _, п := range правки {
 		if _, err := db.Exec(п); err != nil && !strings.Contains(err.Error(), "duplicate column") {

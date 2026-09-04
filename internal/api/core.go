@@ -249,13 +249,80 @@ func (a *API) поВиду(app, from, to, вид string) (any, error) {
 	return out, rows.Err()
 }
 
-// версии и платформы считаются по сырым событиям: в сводках их нет, а окно в
-// две недели для этого вопроса достаточно.
+// Срез сборок: каждый человек считается один раз, по той сборке, с которой
+// его видели в последний раз. Раньше здесь стоял max(people) по дням окна, и
+// сборка застревала наверху своим лучшим днём: на проде 04.09.2026 первой
+// строкой шла 1.29.6 с 11 669 людьми, набранными 21 августа, а живая 1.31.3 с
+// 8 650 стояла пятой. Сумма по дням врёт иначе — она считает одного человека
+// столько раз, сколько дней он заходил.
+const sqlСрезВерсий = `
+	SELECT version, count(*) FROM (
+		SELECT version,
+		       row_number() OVER (PARTITION BY who ORDER BY day DESC) AS место
+		FROM seen
+		WHERE app=? AND day BETWEEN ? AND ? AND version IS NOT NULL AND version <> '')
+	WHERE место = 1
+	GROUP BY version ORDER BY 2 DESC LIMIT 10`
+
+// Запасной путь для установок, где людей не считают: без who связки «человек —
+// сборка» нет, и остаётся срез последних посчитанных суток. Текущий день берём
+// только если других в окне нет — он неполный и занижает числа.
+const sqlСрезВерсийБезЛюдей = `
+	SELECT version, people FROM versions
+	WHERE app=? AND day = (
+		SELECT max(day) FROM versions WHERE app=? AND day BETWEEN ? AND ?
+		  AND (day < ? OR NOT EXISTS (
+		        SELECT 1 FROM versions WHERE app=? AND day BETWEEN ? AND ? AND day < ?)))
+	ORDER BY people DESC LIMIT 10`
+
 func (a *API) версии(app, from, to string) (any, error) {
+	out, err := a.срезВерсий(sqlСрезВерсий, app, from, to)
+	if err != nil {
+		return nil, err
+	}
+	if len(out) == 0 {
+		сегодня := time.Now().UTC().Format(time.DateOnly)
+		out, err = a.срезВерсий(sqlСрезВерсийБезЛюдей,
+			app, app, from, to, сегодня, app, from, to, сегодня)
+		if err != nil {
+			return nil, err
+		}
+	}
+	событий, err := a.событияВерсий(app, from, to)
+	if err != nil {
+		return nil, err
+	}
+	for _, строка := range out {
+		строка["e"] = событий[строка["v"].(string)]
+	}
+	return out, nil
+}
+
+// События по сборкам суммируются честно: одно событие принадлежит одному дню и
+// одной сборке, двойного счёта тут нет — в отличие от людей.
+func (a *API) событияВерсий(app, from, to string) (map[string]float64, error) {
 	rows, err := a.s.DB().Query(`
-		SELECT version, max(people) FROM versions
-		WHERE app=? AND day BETWEEN ? AND ?
-		GROUP BY version ORDER BY 2 DESC LIMIT 10`, app, from, to)
+		SELECT version, sum(hits) FROM versions
+		WHERE app=? AND day BETWEEN ? AND ? GROUP BY version`, app, from, to)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	из := map[string]float64{}
+	for rows.Next() {
+		var версия string
+		var раз float64
+		if err := rows.Scan(&версия, &раз); err != nil {
+			return nil, err
+		}
+		из[версия] = раз
+	}
+	return из, rows.Err()
+}
+
+func (a *API) срезВерсий(sql string, аргументы ...any) ([]map[string]any, error) {
+	rows, err := a.s.DB().Query(sql, аргументы...)
 	if err != nil {
 		return nil, err
 	}

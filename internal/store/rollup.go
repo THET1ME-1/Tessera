@@ -45,16 +45,20 @@ func запросыСводкиДня(app, day string) ([]запросСводк
 		FROM events WHERE app=? AND ts>=? AND ts<?
 		GROUP BY app, kind, name`},
 
-		// Платформа человека за день — та, с которой он слал события чаще всего:
-		// один и тот же человек бывает и на телефоне, и на планшете.
+		// Платформа и сборка человека за день — те, с которых он слал события
+		// чаще всего: один и тот же человек бывает и на телефоне, и на
+		// планшете, а за сутки успевает обновиться. Сборка лежит здесь, а не
+		// только в сводке versions, потому что «на чём люди сидят сейчас»
+		// считается по последнему дню каждого человека, и для этого нужна
+		// связка «человек — сборка».
 		{имя: "посетители", аргументы: деньИСутки, sql: `
-		INSERT OR IGNORE INTO seen (app, day, who, platform)
-		SELECT app, день, who, platform FROM (
-			SELECT app, ? AS день, who, platform, count(*) AS n,
+		INSERT OR IGNORE INTO seen (app, day, who, platform, version)
+		SELECT app, день, who, platform, version FROM (
+			SELECT app, ? AS день, who, platform, version, count(*) AS n,
 			       row_number() OVER (PARTITION BY who ORDER BY count(*) DESC) AS место
 			FROM events
 			WHERE app=? AND ts>=? AND ts<? AND who IS NOT NULL
-			GROUP BY who, platform)
+			GROUP BY who, platform, version)
 		WHERE место = 1`},
 
 		{имя: "часы", аргументы: деньИСутки, sql: `
@@ -66,10 +70,10 @@ func запросыСводкиДня(app, day string) ([]запросСводк
 		GROUP BY 3`},
 
 		{имя: "версии", аргументы: деньИСутки, sql: `
-		INSERT INTO versions (app, day, version, people)
+		INSERT INTO versions (app, day, version, people, hits)
 		SELECT app, ?,
 		       coalesce(nullif(version,''),'неизвестно'),
-		       count(DISTINCT coalesce(who, eid))
+		       count(DISTINCT coalesce(who, eid)), count(*)
 		FROM events WHERE app=? AND ts>=? AND ts<?
 		GROUP BY 3`},
 	}, nil
