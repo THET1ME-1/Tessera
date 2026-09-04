@@ -125,7 +125,7 @@ class ПрогревХолоднойСтраницы(unittest.TestCase):
         self.папка.cleanup()
 
     def test_верх_страницы_готов_до_возврата(self):
-        main.прогреть([f"к{i:02d}" for i in range(40)], self.ист, ждать=True)
+        main.прогреть([(f"к{i:02d}", "a.webp") for i in range(40)], self.ист, ждать=True)
         готовы = [i for i in range(40)
                   if (self.корень / f"к{i:02d}_512.webp").exists()]
         self.assertEqual(готовы[:16], list(range(16)))

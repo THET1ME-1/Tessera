@@ -39,22 +39,30 @@ class ПрогревСтраницы(unittest.TestCase):
         self.папка.cleanup()
 
     def test_ждём_и_кадры_готовы(self):
-        main.прогреть(["раз", "два"], self.ист, ждать=True)
+        main.прогреть([("раз", "a.webp"), ("два", "b.webp")], self.ист, ждать=True)
         self.assertTrue((self.корень / "раз_512.webp").exists())
         self.assertTrue((self.корень / "два_512.webp").exists())
 
     def test_готовые_второй_раз_не_делаем(self):
         (self.корень / "раз_512.webp").write_text("уже есть")
-        main.прогреть(["раз"], self.ист, ждать=True)
+        main.прогреть([("раз", "a.webp")], self.ист, ждать=True)
         self.assertEqual((self.корень / "раз_512.webp").read_text(), "уже есть")
 
     def test_без_генератора_молчим(self):
-        main.прогреть(["раз"], {"thumb": self.ист["thumb"]}, ждать=True)
+        main.прогреть([("раз", "a.webp")], {"thumb": self.ист["thumb"]}, ждать=True)
+        self.assertFalse((self.корень / "раз_512.webp").exists())
+
+    def test_за_звуком_генератор_не_ходит(self):
+        # Миниатюры у голосового не будет никогда, а на странице ленты таких
+        # файлов бывает под полсотни: без проверки имени каждый показ
+        # запускал бы генератор впустую полсотни раз.
+        main.прогреть([("раз", "voice_1786968914693_x.m4a")], self.ист, ждать=True)
         self.assertFalse((self.корень / "раз_512.webp").exists())
 
     def test_упавший_генератор_не_роняет_ленту(self):
-        main.прогреть(["раз"], {"make": ["/нет/такого/файла"],
-                                "thumb": self.ист["thumb"]}, ждать=True)
+        main.прогреть([("раз", "a.webp")],
+                      {"make": ["/нет/такого/файла"], "thumb": self.ист["thumb"]},
+                      ждать=True)
         self.assertFalse((self.корень / "раз_512.webp").exists())
 
 

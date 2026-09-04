@@ -105,6 +105,30 @@ class Оригинал(unittest.TestCase):
         self.assertEqual(первый, второй)
         self.assertTrue(os.path.exists(второй))
 
+    def test_ролик_отдаётся_с_видеотипом_и_одной_копией(self):
+        # Тип решает, покажет ли браузер плеер: с «двоичным файлом» вместо
+        # video/mp4 в лайтбоксе остаётся чёрный прямоугольник. Копия у ролика
+        # одна на оба положения тумблера даты: подписывать его нечем, а вторая
+        # копия — это вторая выкачка тех же мегабайт из бакета.
+        conn = sqlite3.connect(self.db)
+        conn.execute("UPDATE media SET file='memory_1786968914693_x.mp4' WHERE id='abc123'")
+        conn.commit()
+        conn.close()
+        with open(os.path.join(self.склад, "memory_1786968914693_x.mp4"), "wb") as f:
+            f.write(b"clip")
+        ответ = main.оригинал({"id": "abc123"})
+        self.assertEqual(ответ["type"], "video/mp4")
+        self.assertEqual(ответ["path"], main.оригинал({"id": "abc123", "date": "0"})["path"])
+
+    def test_голосовое_отдаётся_звуковым_типом(self):
+        conn = sqlite3.connect(self.db)
+        conn.execute("UPDATE media SET file='voice_1786968914693_x.m4a' WHERE id='abc123'")
+        conn.commit()
+        conn.close()
+        with open(os.path.join(self.склад, "voice_1786968914693_x.m4a"), "wb") as f:
+            f.write(b"sound")
+        self.assertEqual(main.оригинал({"id": "abc123"})["type"], "audio/mp4")
+
     def test_без_id_отказ(self):
         for плохо in ({}, {"id": ""}, {"id": "../../etc/passwd"}, {"id": "a/b"}):
             with self.assertRaises(SystemExit, msg=f"на {плохо!r}"):
