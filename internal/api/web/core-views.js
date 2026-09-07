@@ -53,12 +53,8 @@ function viewOverview() {
         '<div style="display:flex;flex-direction:column;gap:8px;padding-bottom:6px">' +
           '<span class="delta' + (growth < 0 ? " down" : "") + '">' + (growth >= 0 ? "↑ " : "↓ ") +
             Math.abs(growth).toFixed(0) + "% " + (state.людиСчитаются ? "новых" : "событий") + " к прошлой неделе</span>" +
-          '<span class="hero-note">' + (state.людиСчитаются
-            ? (учёток
-                ? "Учёток в приложении. На графике — " + fmt(DATA.totals.people) +
-                  " заходивших за период; хеш считает сервер, соли приложение не знает."
-                : "Уникальные люди за 15 дней. Хеш считает сервер, соли приложение не знает.")
-            : "События за 15 дней. Людей не считаем: в базе одни счётчики.") + "</span>" +
+          (state.людиСчитаются ? ""
+            : '<span class="hero-note">События за 15 дней. Людей не считаем: в базе одни счётчики.</span>') +
         "</div>" +
       "</div>" +
       '<div class="legend" style="margin-bottom:10px">' + (state.людиСчитаются
