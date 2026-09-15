@@ -1,0 +1,88 @@
+{
+  "id": "club",
+  "name": "Розыгрыш",
+  "version": "1.0.0",
+  "run": [
+    "python3",
+    "main.py"
+  ],
+  "every": "20m",
+  "tabs": [
+    {
+      "id": "club",
+      "title": "Розыгрыш",
+      "blocks": [
+        {
+          "type": "stat",
+          "title": "Участников",
+          "span": 3,
+          "src": "club:total"
+        },
+        {
+          "type": "stat",
+          "title": "Поставили приложение",
+          "span": 3,
+          "src": "club:installed"
+        },
+        {
+          "type": "stat",
+          "title": "Собрали пару",
+          "span": 3,
+          "src": "club:paired"
+        },
+        {
+          "type": "stat",
+          "title": "Заходили за неделю",
+          "span": 3,
+          "src": "club:alive7"
+        },
+        {
+          "type": "funnel",
+          "title": "Путь участника",
+          "span": 6,
+          "src": "club:funnel"
+        },
+        {
+          "type": "columns",
+          "title": "Откуда пришли",
+          "span": 6,
+          "src": "club:sources"
+        },
+        {
+          "type": "columns",
+          "title": "Участия по дням",
+          "span": 6,
+          "src": "club:by_day"
+        },
+        {
+          "type": "list",
+          "title": "Кто ещё заходит",
+          "span": 6,
+          "src": "club:retention"
+        },
+        {
+          "type": "columns",
+          "title": "Кампании",
+          "span": 6,
+          "src": "club:campaigns"
+        },
+        {
+          "type": "list",
+          "title": "Новички и старожилы",
+          "span": 6,
+          "src": "club:newcomers"
+        },
+        {
+          "type": "table",
+          "title": "Последние участники",
+          "span": 12,
+          "src": "club:recent"
+        }
+      ]
+    }
+  ],
+  "sql": {
+    "db": "/opt/pocketbase/pb_data/data.db",
+    "pg": ""
+  }
+}
