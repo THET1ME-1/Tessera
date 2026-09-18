@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/THET1ME-1/Tessera/internal/blocks"
+	"github.com/THET1ME-1/Tessera/internal/modules"
 )
 
 // Готовый ответ живёт полминуты: сводки пересчитываются раз в минуту, а панель
@@ -77,7 +78,7 @@ func (a *API) всеДанные(w http.ResponseWriter, r *http.Request) {
 
 	// Данные модулей кладём под их именами: вкладке «Обзор» нужны плитки
 	// дохода и модерации, а лезть за ними отдельными запросами незачем.
-	собрать("modules", func() (any, error) { return a.данныеМодулей() })
+	собрать("modules", func() (any, error) { return a.данныеМодулей(app) })
 
 	if len(ошибки) > 0 {
 		д["errors"] = ошибки
@@ -444,18 +445,31 @@ func (a *API) воронки(app, from, to string) (any, error) {
 	return []map[string]any{{"title": "Размеченные шаги", "steps": out}}, nil
 }
 
-func (a *API) данныеМодулей() (any, error) {
+func (a *API) данныеМодулей(app string) (any, error) {
 	rows, err := a.s.DB().Query(`SELECT module, key, json FROM module_data`)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
+	// Чужие модули отбрасываем здесь, а не в панели: «Доход за месяц» с
+	// прочерком в панели Wallet выглядит поломкой, а не пустотой. Модерация и
+	// доход считают Togetherly, и приложению-соседу их числа не принадлежат.
+	свои := map[string]bool{}
+	if ms, err := modules.Load(a.modulesDir); err == nil {
+		for _, m := range ms {
+			свои[m.ID] = m.ForApp(app)
+		}
+	}
+
 	out := map[string]map[string]json.RawMessage{}
 	for rows.Next() {
 		var модуль, ключ, сырое string
 		if err := rows.Scan(&модуль, &ключ, &сырое); err != nil {
 			return nil, err
+		}
+		if есть, знаем := свои[модуль]; знаем && !есть {
+			continue
 		}
 		if out[модуль] == nil {
 			out[модуль] = map[string]json.RawMessage{}

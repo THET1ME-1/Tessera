@@ -122,7 +122,10 @@ $("signout").addEventListener("click", async () => {
 /* ── вкладки и раскладка ────────────────────────────────────────────────── */
 
 async function загрузитьВкладки() {
-  state.вкладки = await взять(адрес("/api/tabs"));
+  // Приложение обязано ехать в запросе: вкладки у них разные, и без него
+  // сервер отвечает про первое.
+  state.вкладки = await взять(адрес("/api/tabs") +
+    (state.app ? "?app=" + encodeURIComponent(state.app) : ""));
   $("tabs").innerHTML = state.вкладки.map(t =>
     '<button role="tab" data-tab="' + t.id + '" aria-selected="' + (t.id === state.tab) + '">' +
     (t.mod ? '<span class="frag" title="вкладку принёс модуль"></span>' : "") +
@@ -405,12 +408,18 @@ async function загрузитьЯдро() {
   // Макет ждёт от модулей плоские числа (DATA.income.month), а модуль
   // присылает блоки ({value, sub}). Разворачиваем: панель не должна знать,
   // что внутри блока, но обзор рисовался до модулей и правок не требует.
+  // Чужой модуль не приезжает вовсе — сервер отдаёт данные только своим
+  // приложениям. Пустой объект вместо `undefined` здесь означал бы «модуль
+  // есть, но молчит», и обзор Wallet рисовал бы плитку дохода с прочерком.
   const м = DATA.modules || {};
-  DATA.income = развернуть(м.income);
-  DATA.moderation = развернуть(м.moderation);
-  DATA.appdb = развернуть(м.appdb);
+  DATA.income = м.income ? развернуть(м.income) : null;
+  DATA.moderation = м.moderation ? развернуть(м.moderation) : null;
+  DATA.appdb = м.appdb ? развернуть(м.appdb) : null;
   if (!state.app && (DATA.apps || []).length) {
-    state.app = DATA.apps[0].id;
+    let прежнее = "";
+    try { прежнее = localStorage.getItem("tessera-app") || ""; } catch {}
+    const есть = DATA.apps.some(a => a.id === прежнее);
+    state.app = есть ? прежнее : DATA.apps[0].id;
     заполнитьВыборПриложений();
   }
   ядроКогда = Date.now();
@@ -425,7 +434,16 @@ function заполнитьВыборПриложений() {
     "</option>").join("");
   sel.onchange = async () => {
     state.app = sel.value;
+    try { localStorage.setItem("tessera-app", state.app); } catch {}
     ядроКогда = 0;
+    // Вкладки у приложений РАЗНЫЕ: модуль модерации разбирает фото
+    // Togetherly, и в панели Wallet его вкладки нет. Без перезапроса там
+    // оставались чужие вкладки, а открытая чужая отвечала пустотой.
+    await загрузитьВкладки();
+    if (!state.вкладки.some(t => t.id === state.tab)) {
+      state.tab = "overview";
+      location.hash = state.tab;
+    }
     await загрузитьИмена();
     нарисоватьВкладку();
   };
@@ -615,6 +633,11 @@ async function запустить() {
 
   await загрузитьМодули();
   await загрузитьЯдро();       // отсюда узнаём приложение
+  // Вкладки спрашивались ДО того, как приложение стало известно, и приезжали
+  // от первого. У приложений они разные, поэтому спрашиваем ещё раз — теперь
+  // зная, чью панель показываем.
+  await загрузитьВкладки();
+  if (!state.вкладки.some(t => t.id === state.tab)) state.tab = "overview";
   await загрузитьИмена();
   await нарисоватьВкладку();
   свежесть();

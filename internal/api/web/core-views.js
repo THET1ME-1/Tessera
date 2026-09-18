@@ -32,7 +32,14 @@ function viewOverview() {
   const week = dd.slice(-7).reduce((s, d) => s + d[key], 0);
   const prevWeek = dd.slice(-14, -7).reduce((s, d) => s + d[key], 0);
   const growth = prevWeek ? (week - prevWeek) / prevWeek * 100 : 0;
-  const android = DATA.platforms[0], ios = DATA.platforms[1];
+  // Платформы берутся ПО ИМЕНИ, а не по порядку: список приходит
+  // отсортированным по числу людей, и у приложения с одной платформой второго
+  // элемента нет вовсе. Вкладка из-за этого падала целиком — «Cannot read
+  // properties of undefined (reading 'u')» у Wallet, где пока только Android
+  // (18.09.2026).
+  const поПлатформе = имя =>
+    (DATA.platforms || []).find(p => (p.p || "").toLowerCase() === имя) || { p: имя, u: 0 };
+  const android = поПлатформе("android"), ios = поПлатформе("ios");
   // Крупная цифра — сколько всего учёток в приложении, если оно само это
   // сказало (модуль объявляет `people_total`). Ядро своими силами столько не
   // знает: события живут две недели, и человек, не заходивший дольше, из
@@ -81,7 +88,10 @@ function viewOverview() {
     ) +
 
     '<div class="c12"><div class="tiles six">' +
-      liveTile("Сейчас на связи", "moderation:online") +
+      // Плитки модулей рисуются, только когда модуль отвечает ЭТОМУ
+      // приложению. У Wallet нет ни модерации, ни дохода, и прочерк вместо
+      // числа выглядит поломкой, а не пустотой (18.09.2026).
+      (DATA.moderation ? liveTile("Сейчас на связи", "moderation:online") : "") +
       tile("События", fmt(DATA.totals.events), "за 15 дней, свой сервер", dd.map(d => d.events)) +
       tile(state.людиСчитаются ? "Люди" : "Люди", state.людиСчитаются ? fmt(DATA.totals.people) : "не считаются",
            state.людиСчитаются ? "уникальных за период" : "тумблер выключен",
@@ -89,8 +99,12 @@ function viewOverview() {
       tile("Открытий экранов", fmt(DATA.screens.reduce((s, x) => s + x.hits, 0)), "25 экранов размечено",
            dd.filter(d => !d.partial).map(d => d.screens)) +
       tile("Android", pctS(android.u, android.u + ios.u, 0), "iOS " + pctS(ios.u, android.u + ios.u, 0), null) +
-      modTile("Доход за месяц", money((DATA.income || {}).month), "модуль «Доход», четыре источника") +
-      modTile("Файлов на модерации", fmt((DATA.moderation || {}).total), "модуль «Модерация», лента файлов") +
+      (DATA.income
+        ? modTile("Доход за месяц", money(DATA.income.month), "модуль «Доход», четыре источника")
+        : "") +
+      (DATA.moderation
+        ? modTile("Файлов на модерации", fmt(DATA.moderation.total), "модуль «Модерация», лента файлов")
+        : "") +
     "</div></div>" +
 
     panel("c7",
