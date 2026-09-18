@@ -138,22 +138,38 @@ async function загрузитьВкладки() {
     }));
 }
 
+// Номер последней отрисовки. Пока вызов ждёт сервер, человек успевает нажать
+// другую вкладку или период, и тогда вид принадлежит новому вызову. Без этой
+// проверки ядро, досчитав обзор, рисовало «club» своим экраном, и вместо
+// розыгрыша оставалось «ЯДРО[state.tab] is not a function» (18.09.2026), а
+// запоздавшая раскладка модуля затирала уже открытую вкладку.
+let отрисовка = 0;
+
 async function нарисоватьВкладку() {
+  const мой = ++отрисовка;
+  const устарел = () => мой !== отрисовка;
+  const вкладка = state.tab;
+
   document.querySelectorAll("[data-tab]").forEach(b =>
-    b.setAttribute("aria-selected", String(b.dataset.tab === state.tab)));
+    b.setAttribute("aria-selected", String(b.dataset.tab === вкладка)));
 
   const view = $("view");
   view.innerHTML = '<p class="block-empty">Загружаю…</p>';
 
   // Вкладки ядра нарисованы в макете и получают весь набор данных разом.
-  if (ЯДРО[state.tab]) {
+  if (ЯДРО[вкладка]) {
     try {
       await загрузитьЯдро();
+      if (устарел()) return;
+      // Экраны ядра слушают период всегда. Без этого кнопки, погашенные
+      // вкладкой модуля, оставались мёртвыми и на обзоре до перезагрузки.
+      периодУместен([{ src: "core:" + вкладка }]);
       снятьЖивые();
-      ЯДРО[state.tab]();
+      ЯДРО[вкладка]();
       подписатьШапку();
       оживитьПлитки();
     } catch (e) {
+      if (устарел()) return;
       view.innerHTML = '<p class="block-empty">Вкладка не открылась: ' + e.message + "</p>";
     }
     return;
@@ -161,11 +177,13 @@ async function нарисоватьВкладку() {
 
   let раскладка;
   try {
-    раскладка = await взять(адрес("/api/layout?tab=") + encodeURIComponent(state.tab));
+    раскладка = await взять(адрес("/api/layout?tab=") + encodeURIComponent(вкладка));
   } catch (e) {
+    if (устарел()) return;
     view.innerHTML = '<p class="block-empty">Вкладка не открылась: ' + e.message + "</p>";
     return;
   }
+  if (устарел()) return;
 
   const блоки = раскладка.blocks || [];
   state.блоки = блоки;
