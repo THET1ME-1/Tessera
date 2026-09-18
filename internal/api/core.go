@@ -124,7 +124,7 @@ func (a *API) итоги(app, from, to string) (any, error) {
 	// учёток заведено, знает само приложение — если его модуль это объявил,
 	// отдаём и такое число, чтобы крупная цифра обзора отвечала на вопрос
 	// «сколько нас», а не «скольких видел SDK».
-	if всего, есть := blocks.ИзМодуля(a.s, "people_total"); есть {
+	if всего, есть := blocks.ИзМодуля(a.s, "people_total", a.модульСвой(app)); есть {
 		итог["accounts"] = всего
 	}
 	return итог, nil
@@ -445,6 +445,20 @@ func (a *API) воронки(app, from, to string) (any, error) {
 	return []map[string]any{{"title": "Размеченные шаги", "steps": out}}, nil
 }
 
+// модульСвой — показывать ли модуль в панели этого приложения.
+func (a *API) модульСвой(app string) func(string) bool {
+	свои := map[string]bool{}
+	if ms, err := modules.Load(a.modulesDir); err == nil {
+		for _, m := range ms {
+			свои[m.ID] = m.ForApp(app)
+		}
+	}
+	return func(модуль string) bool {
+		есть, знаем := свои[модуль]
+		return !знаем || есть
+	}
+}
+
 func (a *API) данныеМодулей(app string) (any, error) {
 	rows, err := a.s.DB().Query(`SELECT module, key, json FROM module_data`)
 	if err != nil {
@@ -455,12 +469,7 @@ func (a *API) данныеМодулей(app string) (any, error) {
 	// Чужие модули отбрасываем здесь, а не в панели: «Доход за месяц» с
 	// прочерком в панели Wallet выглядит поломкой, а не пустотой. Модерация и
 	// доход считают Togetherly, и приложению-соседу их числа не принадлежат.
-	свои := map[string]bool{}
-	if ms, err := modules.Load(a.modulesDir); err == nil {
-		for _, m := range ms {
-			свои[m.ID] = m.ForApp(app)
-		}
-	}
+	свой := a.модульСвой(app)
 
 	out := map[string]map[string]json.RawMessage{}
 	for rows.Next() {
@@ -468,7 +477,7 @@ func (a *API) данныеМодулей(app string) (any, error) {
 		if err := rows.Scan(&модуль, &ключ, &сырое); err != nil {
 			return nil, err
 		}
-		if есть, знаем := свои[модуль]; знаем && !есть {
+		if !свой(модуль) {
 			continue
 		}
 		if out[модуль] == nil {

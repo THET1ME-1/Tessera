@@ -33,7 +33,7 @@ func стенд(t *testing.T) *store.Store {
 }
 
 func TestИсточникДнейОтдаётФормуДляСтолбиков(t *testing.T) {
-	src := Core(стенд(t))["events_daily"]
+	src := Core(стенд(t), nil)["events_daily"]
 	got, err := src("togetherly", "2026-08-01", "2026-08-14")
 	if err != nil {
 		t.Fatal(err)
@@ -52,7 +52,7 @@ func TestИсточникДнейОтдаётФормуДляСтолбиков(
 }
 
 func TestИсточникЭкрановОтдаётФормуДляРастра(t *testing.T) {
-	src := Core(стенд(t))["screens"]
+	src := Core(стенд(t), nil)["screens"]
 	got, err := src("togetherly", "2026-08-01", "2026-08-14")
 	if err != nil {
 		t.Fatal(err)
@@ -71,7 +71,7 @@ func TestИсточникЭкрановОтдаётФормуДляРастра(
 }
 
 func TestИсточникДействийОтдаётТаблицу(t *testing.T) {
-	src := Core(стенд(t))["actions"]
+	src := Core(стенд(t), nil)["actions"]
 	got, err := src("togetherly", "2026-08-01", "2026-08-14")
 	if err != nil {
 		t.Fatal(err)
@@ -89,7 +89,7 @@ func TestИсточникДействийОтдаётТаблицу(t *testing.T
 }
 
 func TestИсточникВсегоСобытийОтдаётПлитку(t *testing.T) {
-	src := Core(стенд(t))["events_total"]
+	src := Core(стенд(t), nil)["events_total"]
 	got, err := src("togetherly", "2026-08-01", "2026-08-14")
 	if err != nil {
 		t.Fatal(err)
@@ -104,7 +104,7 @@ func TestИсточникВсегоСобытийОтдаётПлитку(t *tes
 }
 
 func TestПустойДиапазонНеРоняет(t *testing.T) {
-	for ключ, src := range Core(стенд(t)) {
+	for ключ, src := range Core(стенд(t), nil) {
 		if _, err := src("togetherly", "2020-01-01", "2020-01-31"); err != nil {
 			t.Fatalf("источник %s на пустом диапазоне: %v", ключ, err)
 		}
@@ -126,7 +126,7 @@ func TestПлиткиЛюдейДелятсяПоПлатформам(t *testing
 		t.Fatal(err)
 	}
 
-	got, err := Core(s)["online"]("togetherly", "", "")
+	got, err := Core(s, nil)["online"]("togetherly", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -167,7 +167,7 @@ func TestАктивныеЗаСуткиСчитаютсяПоЛюдямАНеС�
 		t.Fatal(err)
 	}
 
-	got, errИсточника := Core(s)["active_24h"]("togetherly", "", "")
+	got, errИсточника := Core(s, nil)["active_24h"]("togetherly", "", "")
 	if errИсточника != nil {
 		t.Fatal(errИсточника)
 	}
@@ -197,7 +197,7 @@ func TestПриростНовыхПустБезПрошлогоОтрезка(t 
 	// календарю уйти вперёд, тот же день стал вчерашним — прирост посчитался
 	// как −100%, и тест начал падать сам по себе, без единой правки кода.
 	s := пустойСтенд(t)
-	got, err := Core(s)["new_24h"]("togetherly", "", "")
+	got, err := Core(s, nil)["new_24h"]("togetherly", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}

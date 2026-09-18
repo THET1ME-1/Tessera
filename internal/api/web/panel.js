@@ -237,6 +237,12 @@ let онлайнЗаведён = false;
 function живойОнлайн() {
   const ячейка = $("ctx-online");
   if (!ячейка || онлайнЗаведён) return;
+  // Живые соединения считает модуль Togetherly. В панели Wallet это чужое
+  // число — там своих соединений нет вовсе (18.09.2026).
+  if (!DATA.moderation) {
+    ячейка.textContent = "—";
+    return;
+  }
   онлайнЗаведён = true;
   const тянуть = () => взять(адрес("/api/query") + "?src=moderation:online")
     .then(d => { ячейка.textContent = (d.value || 0).toLocaleString("ru"); })
@@ -436,6 +442,9 @@ function заполнитьВыборПриложений() {
     state.app = sel.value;
     try { localStorage.setItem("tessera-app", state.app); } catch {}
     ядроКогда = 0;
+    онлайнЗаведён = false;
+    const ячейкаОнлайн = $("ctx-online");
+    if (ячейкаОнлайн) ячейкаОнлайн.textContent = "—";
     // Вкладки у приложений РАЗНЫЕ: модуль модерации разбирает фото
     // Togetherly, и в панели Wallet его вкладки нет. Без перезапроса там
     // оставались чужие вкладки, а открытая чужая отвечала пустотой.

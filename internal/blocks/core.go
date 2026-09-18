@@ -12,7 +12,7 @@ import (
 //
 // Все источники читают только сводки: считать агрегаты в момент запроса
 // панели запрещено, это уже стоило соседнему проекту трёх минут на вкладку.
-func Core(s *store.Store) map[string]Source {
+func Core(s *store.Store, свой Фильтр) map[string]Source {
 	all := map[string]Source{
 		"events_daily": func(app, from, to string) (any, error) {
 			rows, err := s.DB().Query(`

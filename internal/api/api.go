@@ -26,7 +26,13 @@ type API struct {
 }
 
 func New(s *store.Store, modulesDir string, secret []byte) *API {
-	return &API{s: s, modulesDir: modulesDir, secret: secret, core: blocks.Core(s)}
+	a := &API{s: s, modulesDir: modulesDir, secret: secret}
+	// Блоки ядра спрашивают у нас, чей модуль: число учёток Togetherly в
+	// панели Wallet — чужая цифра, а не неточность.
+	a.core = blocks.Core(s, func(app, модуль string) bool {
+		return a.модульСвой(app)(модуль)
+	})
+	return a
 }
 
 func (a *API) Routes() *http.ServeMux {
