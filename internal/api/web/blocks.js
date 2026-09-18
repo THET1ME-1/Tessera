@@ -145,7 +145,10 @@ function блокTable(host, d) {
   // получать знак доллара. Без него вся таблица живёт по одному `format`.
   const форма = i => d.formats ? d.formats[i] : d.format;
   // Колонку прижимаем вправо, когда в ней числа: текст читается слева.
+  // Колонка из одних прочерков числовой не считается — иначе «Пара» прыгала
+  // бы влево, как только у кого-то появится «есть».
   const справа = (d.cols || []).map((_, i) => i > 0 &&
+    rows.some(r => числоЛи(r[i])) &&
     rows.every(r => числоЛи(r[i]) || r[i] === null || r[i] === undefined || r[i] === "—"));
   host.innerHTML = '<div style="overflow-x:auto"><table class="tbl"><thead><tr>' +
     (d.cols || []).map((c, i) => "<th" + (справа[i] ? ' class="r"' : "") + ">" + c + "</th>").join("") +

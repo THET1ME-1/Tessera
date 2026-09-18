@@ -43,8 +43,9 @@ const нарисовать = данные => page.evaluate(d => {
   const ячейки = [...host.querySelectorAll("tbody tr")].map(tr =>
     [...tr.querySelectorAll("td")].map(td => td.textContent.trim()));
   const шапка = [...host.querySelectorAll("thead th")].map(th => th.textContent.trim());
+  const справа = [...host.querySelectorAll("thead th")].map(th => th.classList.contains("r"));
   host.remove();
-  return { ячейки, шапка };
+  return { ячейки, шапка, справа };
 }, данные);
 
 // ── розыгрыш: строки из текста, полоса выключена ──
@@ -60,6 +61,8 @@ const строка = (розыгрыш.ячейки || [[]])[0];
   строка.includes("a@b.ru") && строка.includes("playboysparty"), строка.join(" | "));
 проверка("без полосы нет колонки «Доля»", !(розыгрыш.шапка || []).includes("Доля"),
   (розыгрыш.шапка || []).join(" | "));
+проверка("колонка из одних прочерков прижата влево, как текст", розыгрыш.справа &&
+  !розыгрыш.справа[4], "справа: " + (розыгрыш.справа || []).join(","));
 
 // ── доход: деньги в долларах, штуки без доллара, магазин текстом ──
 const покупки = await нарисовать({
