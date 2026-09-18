@@ -98,5 +98,8 @@
     "_комментарий": "Сводки кладёт отдельный сбор по расписанию. Модуль только читает их и превращает в блоки.",
     "summary": "/opt/pocketbase/pb_data/.income.json",
     "history": "/opt/pocketbase/pb_data/.income_history.json"
-  }
+  },
+  "apps": [
+    "app"
+  ]
 }

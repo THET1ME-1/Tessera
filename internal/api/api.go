@@ -82,6 +82,10 @@ func (a *API) layout(w http.ResponseWriter, r *http.Request) {
 	if tab == "" {
 		tab = "overview"
 	}
+	приложение := r.URL.Query().Get("app")
+	if приложение == "" {
+		приложение = a.первоеПриложение()
+	}
 
 	var raw string
 	if err := a.s.DB().QueryRow(`SELECT blocks FROM layout WHERE tab=?`, tab).Scan(&raw); err != nil {
@@ -93,10 +97,10 @@ func (a *API) layout(w http.ResponseWriter, r *http.Request) {
 			// это те, кого видел SDK; сколько всего учёток заведено, знает
 			// только само приложение, и без его плитки главный экран отвечает
 			// не на тот вопрос.
-			bs = append(append([]blocks.Block{}, bs...), a.плиткиМодулей()...)
+			bs = append(append([]blocks.Block{}, bs...), a.плиткиМодулей(приложение)...)
 		}
 		if !ok {
-			bs = a.вкладкаМодуля(tab)
+			bs = a.вкладкаМодуля(tab, приложение)
 		}
 		if bs == nil {
 			http.Error(w, "нет такой вкладки", http.StatusNotFound)
@@ -112,9 +116,9 @@ func (a *API) layout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if tab == "overview" {
-		bs = a.дополнитьНовымиПлитками(bs)
+		bs = a.дополнитьНовымиПлитками(bs, приложение)
 	}
-	отдать(w, map[string]any{"tab": tab, "blocks": bs})
+	отдать(w, map[string]any{"tab": tab, "blocks": a.дляПриложения(bs, приложение)})
 }
 
 // дополнитьНовымиПлитками добавляет на настроенный обзор то, чего человек ещё
@@ -125,13 +129,13 @@ func (a *API) layout(w http.ResponseWriter, r *http.Request) {
 // выглядел неработающим. Возвращать её при каждом открытии тоже нельзя:
 // убранное обязано оставаться убранным. Поэтому каждая плитка предлагается
 // РОВНО ОДИН РАЗ, а отметка о показе живёт в настройках.
-func (a *API) дополнитьНовымиПлитками(bs []blocks.Block) []blocks.Block {
+func (a *API) дополнитьНовымиПлитками(bs []blocks.Block, app string) []blocks.Block {
 	есть := map[string]bool{}
 	for _, b := range bs {
 		есть[b.Src] = true
 	}
 	новые := []blocks.Block{}
-	for _, п := range a.плиткиМодулей() {
+	for _, п := range a.плиткиМодулей(app) {
 		if есть[п.Src] {
 			continue
 		}
@@ -173,18 +177,51 @@ func (a *API) дополнитьНовымиПлитками(bs []blocks.Block) 
 
 // плиткиМодулей — то, что модули предлагают положить на обзор. Порядок как у
 // модулей: сперва база приложения, потом деньги, потом модерация.
-func (a *API) плиткиМодулей() []blocks.Block {
+func (a *API) плиткиМодулей(app string) []blocks.Block {
 	ms, _ := modules.Load(a.modulesDir)
 	out := []blocks.Block{}
 	for _, m := range ms {
+		if !m.ForApp(app) {
+			continue
+		}
 		out = append(out, m.Tiles...)
 	}
 	return out
 }
 
-func (a *API) вкладкаМодуля(tab string) []blocks.Block {
+// дляПриложения отбрасывает блоки чужих модулей.
+//
+// Раскладка правится и ложится в базу ОДНА на все приложения, поэтому плитка
+// модерации, положенная на обзор Togetherly, приезжала бы и в панель Wallet —
+// а там нет ни одного файла на модерацию.
+func (a *API) дляПриложения(bs []blocks.Block, app string) []blocks.Block {
+	ms, _ := modules.Load(a.modulesDir)
+	чужой := map[string]bool{}
+	for _, m := range ms {
+		if !m.ForApp(app) {
+			чужой[m.ID] = true
+		}
+	}
+	if len(чужой) == 0 {
+		return bs
+	}
+	out := make([]blocks.Block, 0, len(bs))
+	for _, b := range bs {
+		владелец, _, _ := strings.Cut(b.Src, ":")
+		if чужой[владелец] {
+			continue
+		}
+		out = append(out, b)
+	}
+	return out
+}
+
+func (a *API) вкладкаМодуля(tab, app string) []blocks.Block {
 	ms, _ := modules.Load(a.modulesDir)
 	for _, m := range ms {
+		if !m.ForApp(app) {
+			continue
+		}
 		for _, t := range m.Tabs {
 			if t.ID == tab {
 				return t.Blocks
@@ -289,8 +326,15 @@ func (a *API) tabs(w http.ResponseWriter, r *http.Request) {
 		{"id": "versions", "title": "Версии", "mod": false},
 		{"id": "apps", "title": "Приложения", "mod": false},
 	}
+	приложение := r.URL.Query().Get("app")
+	if приложение == "" {
+		приложение = a.первоеПриложение()
+	}
 	ms, _ := modules.Load(a.modulesDir)
 	for _, m := range ms {
+		if !m.ForApp(приложение) {
+			continue
+		}
 		for _, t := range m.Tabs {
 			вкладки = append(вкладки, map[string]any{"id": t.ID, "title": t.Title, "mod": true})
 		}

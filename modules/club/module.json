@@ -84,5 +84,8 @@
   "sql": {
     "db": "/opt/pocketbase/pb_data/data.db",
     "pg": ""
-  }
+  },
+  "apps": [
+    "app"
+  ]
 }

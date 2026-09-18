@@ -71,5 +71,8 @@
       "/opt/pocketbase/tools/thumb_cache.py"
     ],
     "pg": ""
-  }
+  },
+  "apps": [
+    "app"
+  ]
 }

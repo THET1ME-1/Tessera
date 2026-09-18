@@ -41,6 +41,24 @@ type Manifest struct {
 	// кто заходил, пока живут события, — на Togetherly это 35 тысяч из 72.
 	// Ключ — имя величины, значение — ключ блока модуля: {"people_total":"users_total"}.
 	Provides map[string]string `json:"provides"`
+	// Apps — приложения, которым модуль показывается. Пусто — всем, как было,
+	// пока приложение было одно. Модуль «Модерация» разбирает фото
+	// Togetherly, и в панели Wallet его вкладке делать нечего: там нет ни
+	// одного файла на модерацию (18.09.2026).
+	Apps []string `json:"apps"`
+}
+
+// ForApp — показывать ли модуль в панели этого приложения.
+func (m Manifest) ForApp(app string) bool {
+	if len(m.Apps) == 0 {
+		return true
+	}
+	for _, id := range m.Apps {
+		if id == app {
+			return true
+		}
+	}
+	return false
 }
 
 // Load читает все папки внутри dir.

@@ -245,5 +245,8 @@
   },
   "provides": {
     "people_total": "users_total"
-  }
+  },
+  "apps": [
+    "app"
+  ]
 }
