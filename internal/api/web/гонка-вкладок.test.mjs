@@ -24,8 +24,9 @@ function проверка(имя, ок, добавка = "") {
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
 await page.goto(URL);
-await page.waitForTimeout(600);
-const поле = await page.$("input[type=password]");
+// Форма входа показывается после ответа сервера, на проде это дольше полсекунды.
+await page.waitForSelector("input[type=password]:visible, [data-tab]");
+const поле = await page.$("input[type=password]:visible");
 if (поле) {
   await поле.fill(ПАРОЛЬ);
   await page.keyboard.press("Enter");

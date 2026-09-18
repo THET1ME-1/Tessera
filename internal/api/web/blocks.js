@@ -128,19 +128,37 @@ function блокRaster(host, d) {
 }
 
 /* ── table: таблица с полосой ───────────────────────────────────────────── */
+/* Ячейка — число, только если она число и есть. Раньше в формат чисел шло всё
+   после первой колонки: почта, магазин и дата участия превращались в NaN, а
+   денежный формат на тексте ронял блок целиком (18.09.2026). */
+const числоЛи = v => typeof v === "number" ||
+  (typeof v === "string" && v.trim() !== "" && isFinite(v));
+
 function блокTable(host, d) {
   const rows = d.rows || [];
   if (!rows.length) return пусто(host, "строк нет");
+  // barCol < 0 — модуль просит таблицу без полосы: делить нечего, одни строки.
   const bar = d.barCol === undefined ? 1 : d.barCol;
-  const max = Math.max(...rows.map(r => Number(r[bar]) || 0)) || 1;
+  const сПолосой = bar >= 0;
+  const max = сПолосой ? Math.max(...rows.map(r => Number(r[bar]) || 0)) || 1 : 1;
+  // `formats` задаёт форму каждой колонки: «Штук» рядом с «Денег» не должны
+  // получать знак доллара. Без него вся таблица живёт по одному `format`.
+  const форма = i => d.formats ? d.formats[i] : d.format;
+  // Колонку прижимаем вправо, когда в ней числа: текст читается слева.
+  const справа = (d.cols || []).map((_, i) => i > 0 &&
+    rows.every(r => числоЛи(r[i]) || r[i] === null || r[i] === undefined || r[i] === "—"));
   host.innerHTML = '<div style="overflow-x:auto"><table class="tbl"><thead><tr>' +
-    (d.cols || []).map((c, i) => '<th' + (i ? ' class="r"' : "") + ">" + c + "</th>").join("") +
-    '<th class="barcell">Доля</th></tr></thead><tbody>' +
+    (d.cols || []).map((c, i) => "<th" + (справа[i] ? ' class="r"' : "") + ">" + c + "</th>").join("") +
+    (сПолосой ? '<th class="barcell">Доля</th>' : "") + "</tr></thead><tbody>" +
     rows.map(r => "<tr>" +
       r.map((v, i) => i === 0 ? "<td>" + nameCell(String(v), true) + "</td>"
-                              : '<td class="r">' + число(v, d.format) + "</td>").join("") +
-      '<td class="barcell"><span class="rowbar"><span style="width:' +
-        ((Number(r[bar]) || 0) / max * 100).toFixed(1) + '%"></span></span></td>' +
+        : "<td" + (справа[i] ? ' class="r"' : "") + ">" +
+          (числоЛи(v) ? число(Number(v), форма(i)) : текстом(v === null || v === undefined ? "—" : v)) +
+          "</td>").join("") +
+      (сПолосой
+        ? '<td class="barcell"><span class="rowbar"><span style="width:' +
+          ((Number(r[bar]) || 0) / max * 100).toFixed(1) + '%"></span></span></td>'
+        : "") +
     "</tr>").join("") + "</tbody></table></div>";
 }
 
