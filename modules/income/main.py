@@ -20,7 +20,9 @@
 
 import json
 import os
+import sqlite3
 import sys
+from datetime import datetime, timedelta, timezone
 
 ЗДЕСЬ = os.path.dirname(os.path.abspath(__file__))
 
@@ -56,6 +58,58 @@ def месяц_до(когда):
     return f"{год}-{месяц - 1:02d}"
 
 
+def покупки_с_полуночи(путь):
+    """Сколько покупок в App Store и Google Play прошло через наш сервер с полуночи по Москве.
+
+    Чек App Store приходит заново при каждом восстановлении покупок, поэтому
+    сделка считается по номеру транзакции и только в день, когда пришла впервые.
+    """
+    счёт = {"appstore": 0, "play": 0}
+    if not путь or not os.path.exists(путь):
+        return счёт
+    полночь = (datetime.now(timezone.utc) + timedelta(hours=3)).replace(
+        hour=0, minute=0, second=0, microsecond=0) - timedelta(hours=3)
+    try:
+        база = sqlite3.connect(f"file:{путь}?mode=ro", uri=True, timeout=8)
+        строки = база.execute("""
+            SELECT store, count(*) FROM (
+              SELECT CASE WHEN coalesce(transaction_id, '') != '' THEN 'appstore' ELSE 'play' END AS store,
+                     min(at) AS first_at
+              FROM iap_purchases
+              GROUP BY store, CASE WHEN coalesce(transaction_id, '') != '' THEN transaction_id ELSE id END)
+            WHERE first_at >= ?
+            GROUP BY store""", (полночь.strftime("%Y-%m-%d %H:%M:%S.000Z"),)).fetchall()
+        база.close()
+    except sqlite3.Error as ошибка:
+        print(f"покупки по чекам: {ошибка}", file=sys.stderr)
+        return счёт
+    for магазин, число in строки:
+        счёт[магазин] = число
+    return счёт
+
+
+def сегодня_по_чекам(сводка, счёт):
+    """Магазины присылают день назавтра, поэтому их «сегодня» считаем сами:
+    покупки по нашим чекам на среднюю выручку за штуку в этом месяце."""
+    totals = сводка.setdefault("totals", {})
+    сегодня = (datetime.now(timezone.utc) + timedelta(hours=3)).strftime("%Y-%m-%d")
+    for ключ in ДЕНЬ_НАЗАВТРА:
+        д = сводка.get("sources", {}).get(ключ)
+        if not д or not д.get("ok") or not д.get("month_sales"):
+            continue
+        сумма = счёт.get(ключ, 0) * float(д.get("month") or 0) / д["month_sales"]
+        д["today"] = round(сумма, 2)
+        д["today_by_receipts"] = счёт.get(ключ, 0)
+        totals["today"] = (totals.get("today") or 0) + сумма
+        # Месяц по отчётам кончается вчерашним днём, сегодняшний добавляем сами
+        д["month"] = round(float(д.get("month") or 0) + сумма, 2)
+        totals["month"] = (totals.get("month") or 0) + сумма
+        # Сегодняшний день в подневных данных: у Play там неполный отчёт, у Apple пусто
+        прошлые = [день for день in д.get("days") or [] if день.get("d") != сегодня]
+        д["days"] = прошлые + [{"d": сегодня, "v": round(сумма, 2)}]
+    return сводка
+
+
 # ── блоки ───────────────────────────────────────────────────────────────────
 
 def блоки(сводка, история):
@@ -85,7 +139,7 @@ def блоки(сводка, история):
     заСегодня = [{"name": д.get("title", к), "value": деньги(д.get("today"))}
                  for к, д in источники.items() if д.get("ok") and д.get("today")]
     заСегодня.sort(key=lambda p: -p["value"])
-    итог["today"] = {"value": деньги(totals.get("today")), "sub": "с полуночи, магазины пришлют завтра",
+    итог["today"] = {"value": деньги(totals.get("today")), "sub": "с полуночи, магазины по нашим чекам",
                      "format": "money", "parts": заСегодня}
     итог["yesterday"] = {"value": деньги(totals.get("yesterday")), "sub": "полные сутки",
                          "format": "money"}
@@ -113,8 +167,9 @@ def блоки(сводка, история):
         прошлый = д.get("prev_month")
         if прошлый is None:
             прошлый = прошлый_в_архиве.get(ключ)
-        # Магазины присылают продажи дня только назавтра: ноль читался бы поломкой
-        сегодня = "—" if ключ in ДЕНЬ_НАЗАВТРА else деньги(д.get("today"))
+        # Магазины присылают продажи дня только назавтра: без чеков ноль читался бы поломкой
+        без_чеков = ключ in ДЕНЬ_НАЗАВТРА and "today_by_receipts" not in д
+        сегодня = "—" if без_чеков else деньги(д.get("today"))
         строки.append([д.get("title", ключ), сегодня,
                        деньги(д.get("month")), деньги(прошлый)])
     строки.sort(key=lambda r: -(r[2] or 0))
@@ -165,6 +220,9 @@ def блоки(сводка, история):
     # Оговорки источников — на видном месте, а не в чужой голове.
     оговорки = [f"{д.get('title', к)}: {д['note'].rstrip('.')}." for к, д in источники.items()
                 if д.get("note")]
+    if any("today_by_receipts" in источники.get(к, {}) for к in ДЕНЬ_НАЗАВТРА):
+        оговорки.append("App Store и Google Play за сегодня: покупки по нашим чекам с полуночи по Москве "
+                        "на среднюю выручку за штуку в этом месяце. Точная цифра придёт с отчётом магазина назавтра.")
     курс = сводка.get("rates", {}).get("rub_per_usd")
     if курс:
         оговорки.append(f"Рубли и евро приведены к доллару по курсу дня сборки: {round(курс, 2)} ₽.")
@@ -190,10 +248,10 @@ def блоки(сводка, история):
     "fern_pro": "Fern Pro",
 }
 
-# Откуда у человека Плюс: колонка `users.plus_platform`.
 # Источники, которые присылают продажи дня только назавтра
 ДЕНЬ_НАЗАВТРА = {"appstore", "play"}
 
+# Откуда у человека Плюс: колонка `users.plus_platform`.
 КАНАЛЫ = {
     "lava": "lava",
     "play": "Google Play",
@@ -298,6 +356,7 @@ def собрать(ключи=None):
         print(f"сводки нет по пути {f.get('summary')!r}: поправьте \"files\" в module.json",
               file=sys.stderr)
         sys.exit(1)
+    сводка = сегодня_по_чекам(сводка, покупки_с_полуночи(f.get("pb_db")))
     все = блоки(сводка, прочитать(f.get("history")))
     return {k: v for k, v in все.items() if not ключи or k in ключи}
 
@@ -315,6 +374,7 @@ def main():
         if ключ == "month" and isinstance(параметры, dict) and ("from" in параметры or "to" in параметры):
             f = настройки()
             сводка = прочитать(f.get("summary")) or {}
+            сводка = сегодня_по_чекам(сводка, покупки_с_полуночи(f.get("pb_db")))
             история = прочитать(f.get("history"))
             от, до = параметры.get("from", ""), параметры.get("to", "")
             # «Всё время» ядро присылает границей года ноль. Считать его по
