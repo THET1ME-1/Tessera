@@ -24,7 +24,7 @@ func Люди(s *store.Store) map[string]Source {
 		до := time.Now().UTC().Format("2006-01-02")
 
 		var всего float64
-		err := s.DB().QueryRow(`SELECT count(DISTINCT who) FROM seen
+		err := s.Чтение().QueryRow(`SELECT count(DISTINCT who) FROM seen
 			WHERE app=? AND day BETWEEN ? AND ?`, app, от, до).Scan(&всего)
 		if err != nil {
 			return nil, fmt.Errorf("активные за %d суток: %w", дней, err)
@@ -43,7 +43,7 @@ func Люди(s *store.Store) map[string]Source {
 			// Онлайн — те, от кого событие пришло за последние пять минут.
 			порог := time.Now().Add(-5 * time.Minute).Unix()
 			var всего float64
-			err := s.DB().QueryRow(`SELECT count(DISTINCT who) FROM events
+			err := s.Чтение().QueryRow(`SELECT count(DISTINCT who) FROM events
 				WHERE app=? AND ts >= ? AND who IS NOT NULL`, app, порог).Scan(&всего)
 			if err != nil {
 				return nil, fmt.Errorf("онлайн: %w", err)
@@ -72,7 +72,7 @@ func Люди(s *store.Store) map[string]Source {
 		// человек, не заходивший дольше, отсюда выпадает.
 		"people_seen": func(app, from, to string) (any, error) {
 			var всего float64
-			if err := s.DB().QueryRow(`SELECT count(DISTINCT who) FROM seen WHERE app=?`,
+			if err := s.Чтение().QueryRow(`SELECT count(DISTINCT who) FROM seen WHERE app=?`,
 				app).Scan(&всего); err != nil {
 				return nil, fmt.Errorf("все посетители: %w", err)
 			}
@@ -105,7 +105,7 @@ func новые(s *store.Store, app string, дней int) (any, error) {
 
 	считать := func(от, до string) (float64, error) {
 		var n float64
-		err := s.DB().QueryRow(`
+		err := s.Чтение().QueryRow(`
 			SELECT count(*) FROM (
 				SELECT who, min(day) AS первый FROM seen WHERE app=? GROUP BY who)
 			WHERE первый BETWEEN ? AND ?`, app, от, до).Scan(&n)
@@ -144,7 +144,7 @@ func новые(s *store.Store, app string, дней int) (any, error) {
 }
 
 func платформы(s *store.Store, запрос string, args ...any) ([]Row, error) {
-	rows, err := s.DB().Query(запрос, args...)
+	rows, err := s.Чтение().Query(запрос, args...)
 	if err != nil {
 		return nil, fmt.Errorf("разбивка по платформам: %w", err)
 	}

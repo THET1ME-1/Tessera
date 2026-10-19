@@ -52,7 +52,7 @@ func (a *API) logout(w http.ResponseWriter, r *http.Request) {
 // Единственный роут, открытый без куки: иначе панели не с чего начать.
 func (a *API) state(w http.ResponseWriter, r *http.Request) {
 	var есть int
-	a.s.DB().QueryRow(`SELECT count(*) FROM settings WHERE k='password'`).Scan(&есть)
+	a.s.Чтение().QueryRow(`SELECT count(*) FROM settings WHERE k='password'`).Scan(&есть)
 	c, err := r.Cookie("tessera")
 	отдать(w, map[string]any{
 		"passwordSet": есть > 0,

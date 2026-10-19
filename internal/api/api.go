@@ -94,7 +94,7 @@ func (a *API) layout(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var raw string
-	if err := a.s.DB().QueryRow(`SELECT blocks FROM layout WHERE tab=?`, tab).Scan(&raw); err != nil {
+	if err := a.s.Чтение().QueryRow(`SELECT blocks FROM layout WHERE tab=?`, tab).Scan(&raw); err != nil {
 		// Своей раскладки ещё нет — отдаём заводскую.
 		bs, ok := Default()[tab]
 		if ok && tab == "overview" {
@@ -147,7 +147,7 @@ func (a *API) дополнитьНовымиПлитками(bs []blocks.Block, 
 		}
 		ключ := "tile.offered." + п.Src
 		var было string
-		a.s.DB().QueryRow(`SELECT v FROM settings WHERE k=?`, ключ).Scan(&было)
+		a.s.Чтение().QueryRow(`SELECT v FROM settings WHERE k=?`, ключ).Scan(&было)
 		if было != "" {
 			continue // уже предлагали, человек её убрал — не навязываемся
 		}
@@ -287,7 +287,7 @@ func (a *API) block(w http.ResponseWriter, r *http.Request) {
 	// Данные модуля панель читает из базы: она не ждёт, пока чужая программа
 	// сходит в четыре чужих API.
 	var raw string
-	err := a.s.DB().QueryRow(`SELECT json FROM module_data WHERE module=? AND key=?`,
+	err := a.s.Чтение().QueryRow(`SELECT json FROM module_data WHERE module=? AND key=?`,
 		владелец, ключ).Scan(&raw)
 	if err != nil {
 		http.Error(w, "модуль ещё не отвечал", http.StatusNotFound)
@@ -372,7 +372,7 @@ func (a *API) labels(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rows, err := a.s.DB().Query(`SELECT key, title FROM labels WHERE app=?`,
+	rows, err := a.s.Чтение().Query(`SELECT key, title FROM labels WHERE app=?`,
 		r.URL.Query().Get("app"))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -401,7 +401,7 @@ func (a *API) modulesList(w http.ResponseWriter, r *http.Request) {
 	out := make([]map[string]any, 0, len(ms))
 	for _, m := range ms {
 		var свежесть *int64
-		a.s.DB().QueryRow(`SELECT max(updated) FROM module_data WHERE module=?`, m.ID).Scan(&свежесть)
+		a.s.Чтение().QueryRow(`SELECT max(updated) FROM module_data WHERE module=?`, m.ID).Scan(&свежесть)
 		запись := map[string]any{
 			"id": m.ID, "name": m.Name, "version": m.Version,
 			"tabs": len(m.Tabs), "tiles": len(m.Tiles), "updated": nil,

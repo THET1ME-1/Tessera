@@ -30,14 +30,14 @@ func (s *Store) CreateApp(id, name string) (string, error) {
 
 func (s *Store) AppByKey(key string) (string, error) {
 	var id string
-	if err := s.db.QueryRow(`SELECT id FROM apps WHERE key=?`, key).Scan(&id); err != nil {
+	if err := s.чтение.QueryRow(`SELECT id FROM apps WHERE key=?`, key).Scan(&id); err != nil {
 		return "", fmt.Errorf("ключ не признан: %w", err)
 	}
 	return id, nil
 }
 
 func (s *Store) Apps() ([]App, error) {
-	rows, err := s.db.Query(`SELECT id, name, key, created FROM apps ORDER BY created`)
+	rows, err := s.чтение.Query(`SELECT id, name, key, created FROM apps ORDER BY created`)
 	if err != nil {
 		return nil, fmt.Errorf("список приложений: %w", err)
 	}

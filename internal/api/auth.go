@@ -44,7 +44,7 @@ func SetPassword(s *store.Store, pass string) error {
 // Check сверяет пароль. Пока пароль не задан, внутрь не пускает никого.
 func Check(s *store.Store, pass string) bool {
 	var v string
-	if err := s.DB().QueryRow(`SELECT v FROM settings WHERE k='password'`).Scan(&v); err != nil {
+	if err := s.Чтение().QueryRow(`SELECT v FROM settings WHERE k='password'`).Scan(&v); err != nil {
 		return false
 	}
 	части := strings.SplitN(v, ":", 2)

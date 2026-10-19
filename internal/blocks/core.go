@@ -15,7 +15,7 @@ import (
 func Core(s *store.Store, свой Фильтр) map[string]Source {
 	all := map[string]Source{
 		"events_daily": func(app, from, to string) (any, error) {
-			rows, err := s.DB().Query(`
+			rows, err := s.Чтение().Query(`
 				SELECT day, sum(hits) FROM daily
 				WHERE app=? AND day BETWEEN ? AND ?
 				GROUP BY day ORDER BY day`, app, from, to)
@@ -37,7 +37,7 @@ func Core(s *store.Store, свой Фильтр) map[string]Source {
 		},
 
 		"people_daily": func(app, from, to string) (any, error) {
-			rows, err := s.DB().Query(`
+			rows, err := s.Чтение().Query(`
 				SELECT day, count(*) FROM seen
 				WHERE app=? AND day BETWEEN ? AND ?
 				GROUP BY day ORDER BY day`, app, from, to)
@@ -59,7 +59,7 @@ func Core(s *store.Store, свой Фильтр) map[string]Source {
 		},
 
 		"screens": func(app, from, to string) (any, error) {
-			rows, err := s.DB().Query(`
+			rows, err := s.Чтение().Query(`
 				SELECT name, sum(ms)/1000.0/3600.0 FROM daily
 				WHERE app=? AND day BETWEEN ? AND ? AND kind='screen'
 				GROUP BY name`, app, from, to)
@@ -85,7 +85,7 @@ func Core(s *store.Store, свой Фильтр) map[string]Source {
 		},
 
 		"actions": func(app, from, to string) (any, error) {
-			rows, err := s.DB().Query(`
+			rows, err := s.Чтение().Query(`
 				SELECT name, sum(hits), sum(people) FROM daily
 				WHERE app=? AND day BETWEEN ? AND ? AND kind='action'
 				GROUP BY name ORDER BY sum(hits) DESC`, app, from, to)
@@ -108,7 +108,7 @@ func Core(s *store.Store, свой Фильтр) map[string]Source {
 
 		"events_total": func(app, from, to string) (any, error) {
 			var всего float64
-			err := s.DB().QueryRow(`SELECT coalesce(sum(hits),0) FROM daily
+			err := s.Чтение().QueryRow(`SELECT coalesce(sum(hits),0) FROM daily
 				WHERE app=? AND day BETWEEN ? AND ?`, app, from, to).Scan(&всего)
 			if err != nil {
 				return nil, fmt.Errorf("всего событий: %w", err)
@@ -118,7 +118,7 @@ func Core(s *store.Store, свой Фильтр) map[string]Source {
 
 		"people_total": func(app, from, to string) (any, error) {
 			var всего float64
-			err := s.DB().QueryRow(`SELECT count(DISTINCT who) FROM seen
+			err := s.Чтение().QueryRow(`SELECT count(DISTINCT who) FROM seen
 				WHERE app=? AND day BETWEEN ? AND ?`, app, from, to).Scan(&всего)
 			if err != nil {
 				return nil, fmt.Errorf("всего людей: %w", err)

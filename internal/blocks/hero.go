@@ -33,7 +33,7 @@ func (ф Фильтр) Для(app string) func(string) bool {
 // показывала 150 649.
 func ИзМодуля(s *store.Store, величина string, свой func(модуль string) bool) (float64, bool) {
 	var адрес string
-	if err := s.DB().QueryRow(`SELECT v FROM settings WHERE k=?`,
+	if err := s.Чтение().QueryRow(`SELECT v FROM settings WHERE k=?`,
 		"provides."+величина).Scan(&адрес); err != nil || адрес == "" {
 		return 0, false
 	}
@@ -45,7 +45,7 @@ func ИзМодуля(s *store.Store, величина string, свой func(м�
 		return 0, false
 	}
 	var raw string
-	if err := s.DB().QueryRow(`SELECT json FROM module_data WHERE module=? AND key=?`,
+	if err := s.Чтение().QueryRow(`SELECT json FROM module_data WHERE module=? AND key=?`,
 		части[0], части[1]).Scan(&raw); err != nil {
 		return 0, false
 	}
@@ -69,7 +69,7 @@ func Герой(s *store.Store, свой Фильтр) map[string]Source {
 		// вернувшиеся стопкой. Разделение важнее суммы: рост из новых и рост
 		// из вернувшихся — разные новости.
 		"people_hero": func(app, from, to string) (any, error) {
-			rows, err := s.DB().Query(`
+			rows, err := s.Чтение().Query(`
 				SELECT s.day,
 				       count(*) AS всего,
 				       sum(CASE WHEN п.первый = s.day THEN 1 ELSE 0 END) AS новые
@@ -112,7 +112,7 @@ func Герой(s *store.Store, свой Фильтр) map[string]Source {
 			}
 
 			var людей float64
-			if err := s.DB().QueryRow(`SELECT count(DISTINCT who) FROM seen
+			if err := s.Чтение().QueryRow(`SELECT count(DISTINCT who) FROM seen
 				WHERE app=? AND day BETWEEN ? AND ?`, app, from, to).Scan(&людей); err != nil {
 				return nil, err
 			}
@@ -139,7 +139,7 @@ func Герой(s *store.Store, свой Фильтр) map[string]Source {
 		// events_hero — то же, но про события: он встаёт на место героя, когда
 		// счёт людей выключен и говорить о людях нечего.
 		"events_hero": func(app, from, to string) (any, error) {
-			rows, err := s.DB().Query(`
+			rows, err := s.Чтение().Query(`
 				SELECT day, sum(hits) FROM daily
 				WHERE app=? AND day BETWEEN ? AND ?
 				GROUP BY day ORDER BY day`, app, from, to)
@@ -166,7 +166,7 @@ func Герой(s *store.Store, свой Фильтр) map[string]Source {
 
 		// hours — ритм суток. Спутник героя: объясняет, когда людям удобно.
 		"hours": func(app, from, to string) (any, error) {
-			rows, err := s.DB().Query(`
+			rows, err := s.Чтение().Query(`
 				SELECT cast(strftime('%H', ts, 'unixepoch') AS INTEGER) AS час, count(*)
 				FROM events WHERE app=? GROUP BY час ORDER BY час`, app)
 			if err != nil {

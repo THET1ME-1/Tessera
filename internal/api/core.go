@@ -99,20 +99,20 @@ func (a *API) всеДанные(w http.ResponseWriter, r *http.Request) {
 
 func (a *API) итоги(app, from, to string) (any, error) {
 	var события, экранов float64
-	err := a.s.DB().QueryRow(`SELECT coalesce(sum(hits),0),
+	err := a.s.Чтение().QueryRow(`SELECT coalesce(sum(hits),0),
 		coalesce(sum(CASE WHEN kind='screen' THEN hits ELSE 0 END),0)
 		FROM daily WHERE app=? AND day BETWEEN ? AND ?`, app, from, to).Scan(&события, &экранов)
 	if err != nil {
 		return nil, err
 	}
 	var людей, заСутки float64
-	a.s.DB().QueryRow(`SELECT count(DISTINCT who) FROM seen WHERE app=? AND day BETWEEN ? AND ?`,
+	a.s.Чтение().QueryRow(`SELECT count(DISTINCT who) FROM seen WHERE app=? AND day BETWEEN ? AND ?`,
 		app, from, to).Scan(&людей)
-	a.s.DB().QueryRow(`SELECT count(*) FROM seen WHERE app=? AND day=?`,
+	a.s.Чтение().QueryRow(`SELECT count(*) FROM seen WHERE app=? AND day=?`,
 		app, time.Now().UTC().Format("2006-01-02")).Scan(&заСутки)
 
 	var дней int
-	a.s.DB().QueryRow(`SELECT count(DISTINCT day) FROM daily WHERE app=? AND day BETWEEN ? AND ?`,
+	a.s.Чтение().QueryRow(`SELECT count(DISTINCT day) FROM daily WHERE app=? AND day BETWEEN ? AND ?`,
 		app, from, to).Scan(&дней)
 
 	итог := map[string]any{
@@ -133,7 +133,7 @@ func (a *API) итоги(app, from, to string) (any, error) {
 // дни — по одной строке на сутки: события, люди, новые, вернувшиеся, экраны.
 // Новые считаются по первому дню, когда человека вообще видели.
 func (a *API) дни(app, from, to string) (any, error) {
-	rows, err := a.s.DB().Query(`
+	rows, err := a.s.Чтение().Query(`
 		WITH люди AS (
 		       SELECT s.day,
 		              count(*) AS всего,
@@ -175,7 +175,7 @@ func (a *API) дни(app, from, to string) (any, error) {
 
 // часы — ритм суток по сырым событиям: они живут две недели, этого хватает.
 func (a *API) часы(app string) (any, error) {
-	rows, err := a.s.DB().Query(`
+	rows, err := a.s.Чтение().Query(`
 		SELECT hour, sum(hits), sum(people) FROM hourly
 		WHERE app=? GROUP BY hour ORDER BY hour`, app)
 	if err != nil {
@@ -196,7 +196,7 @@ func (a *API) часы(app string) (any, error) {
 }
 
 func (a *API) экраны(app, from, to string) (any, error) {
-	rows, err := a.s.DB().Query(`
+	rows, err := a.s.Чтение().Query(`
 		SELECT name, sum(hits), sum(people), sum(ms)
 		FROM daily WHERE app=? AND day BETWEEN ? AND ? AND kind='screen'
 		GROUP BY name ORDER BY sum(hits) DESC`, app, from, to)
@@ -229,7 +229,7 @@ func (a *API) действия(app, from, to string) (any, error) {
 }
 
 func (a *API) поВиду(app, from, to, вид string) (any, error) {
-	rows, err := a.s.DB().Query(`
+	rows, err := a.s.Чтение().Query(`
 		SELECT name, sum(hits), sum(people) FROM daily
 		WHERE app=? AND day BETWEEN ? AND ? AND kind=?
 		GROUP BY name ORDER BY sum(hits) DESC`, app, from, to, вид)
@@ -302,7 +302,7 @@ func (a *API) версии(app, from, to string) (any, error) {
 // События по сборкам суммируются честно: одно событие принадлежит одному дню и
 // одной сборке, двойного счёта тут нет — в отличие от людей.
 func (a *API) событияВерсий(app, from, to string) (map[string]float64, error) {
-	rows, err := a.s.DB().Query(`
+	rows, err := a.s.Чтение().Query(`
 		SELECT version, sum(hits) FROM versions
 		WHERE app=? AND day BETWEEN ? AND ? GROUP BY version`, app, from, to)
 	if err != nil {
@@ -323,7 +323,7 @@ func (a *API) событияВерсий(app, from, to string) (map[string]float
 }
 
 func (a *API) срезВерсий(sql string, аргументы ...any) ([]map[string]any, error) {
-	rows, err := a.s.DB().Query(sql, аргументы...)
+	rows, err := a.s.Чтение().Query(sql, аргументы...)
 	if err != nil {
 		return nil, err
 	}
@@ -342,7 +342,7 @@ func (a *API) срезВерсий(sql string, аргументы ...any) ([]map
 }
 
 func (a *API) платформы(app, from, to string) (any, error) {
-	rows, err := a.s.DB().Query(`
+	rows, err := a.s.Чтение().Query(`
 		SELECT coalesce(nullif(platform,''),'неизвестно'), count(DISTINCT who)
 		FROM seen WHERE app=? AND day BETWEEN ? AND ? GROUP BY 1 ORDER BY 2 DESC`,
 		app, from, to)
@@ -367,7 +367,7 @@ func (a *API) платформы(app, from, to string) (any, error) {
 // седьмой день. У молодых когорт вместо нуля прочерк: неделя, которой три дня,
 // не может показать возврат на седьмой.
 func (a *API) когорты(app string) (any, error) {
-	rows, err := a.s.DB().Query(`
+	rows, err := a.s.Чтение().Query(`
 		SELECT п.day AS когорта, count(DISTINCT п.who) AS размер,
 		       count(DISTINCT CASE WHEN s.day = date(п.day,'+1 day') THEN s.who END),
 		       count(DISTINCT CASE WHEN s.day = date(п.day,'+3 day') THEN s.who END),
@@ -414,7 +414,7 @@ func (a *API) когорты(app string) (any, error) {
 func (a *API) реклама(app, from, to string) (any, error) {
 	var имя string
 	var показов, людей float64
-	err := a.s.DB().QueryRow(`
+	err := a.s.Чтение().QueryRow(`
 		SELECT name, sum(hits), sum(people) FROM daily
 		WHERE app=? AND day BETWEEN ? AND ? AND kind='ad'
 		GROUP BY name ORDER BY sum(hits) DESC LIMIT 1`, app, from, to).Scan(&имя, &показов, &людей)
@@ -460,7 +460,7 @@ func (a *API) модульСвой(app string) func(string) bool {
 }
 
 func (a *API) данныеМодулей(app string) (any, error) {
-	rows, err := a.s.DB().Query(`SELECT module, key, json FROM module_data`)
+	rows, err := a.s.Чтение().Query(`SELECT module, key, json FROM module_data`)
 	if err != nil {
 		return nil, err
 	}
@@ -515,13 +515,13 @@ func (a *API) приложения() (any, error) {
 	out := []map[string]any{}
 	for _, app := range apps {
 		var события, людей, заСутки float64
-		a.s.DB().QueryRow(sqlСобытийПриложения, app.ID).Scan(&события)
-		a.s.DB().QueryRow(sqlЛюдейПриложения, app.ID).Scan(&людей)
-		a.s.DB().QueryRow(sqlЗаСуткиПриложения,
+		a.s.Чтение().QueryRow(sqlСобытийПриложения, app.ID).Scan(&события)
+		a.s.Чтение().QueryRow(sqlЛюдейПриложения, app.ID).Scan(&людей)
+		a.s.Чтение().QueryRow(sqlЗаСуткиПриложения,
 			app.ID, time.Now().UTC().Format("2006-01-02")).Scan(&заСутки)
 
 		var sdk sql.NullString
-		a.s.DB().QueryRow(sqlВерсииПриложения, app.ID).Scan(&sdk)
+		a.s.Чтение().QueryRow(sqlВерсииПриложения, app.ID).Scan(&sdk)
 
 		out = append(out, map[string]any{
 			"id": app.ID, "name": app.Name, "live": события > 0,
@@ -533,7 +533,7 @@ func (a *API) приложения() (any, error) {
 }
 
 func платформыСтрокой(a *API, app string) string {
-	rows, err := a.s.DB().Query(sqlПлатформПриложения, app)
+	rows, err := a.s.Чтение().Query(sqlПлатформПриложения, app)
 	if err != nil {
 		return ""
 	}

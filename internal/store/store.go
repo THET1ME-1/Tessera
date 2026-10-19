@@ -11,13 +11,27 @@ import (
 	"fmt"
 	"strings"
 
-	_ "github.com/mattn/go-sqlite3"
+	"github.com/mattn/go-sqlite3"
 )
 
 //go:embed schema.sql
 var schema string
 
-type Store struct{ db *sql.DB }
+type Store struct {
+	db     *sql.DB // запись: соединение одно
+	чтение *sql.DB // чтение панели: свои соединения, писателя не ждут
+}
+
+// Читающее соединение держит сортировки в памяти, как пишущее. Строка адреса
+// temp_store не знает, поэтому прагма ставится каждому новому соединению.
+func init() {
+	sql.Register("sqlite3_чтение", &sqlite3.SQLiteDriver{
+		ConnectHook: func(c *sqlite3.SQLiteConn) error {
+			_, err := c.Exec("PRAGMA temp_store = MEMORY", nil)
+			return err
+		},
+	})
+}
 
 // Open открывает базу и доводит схему до нужного вида.
 func Open(path string) (*Store, error) {
@@ -57,7 +71,18 @@ func Open(path string) (*Store, error) {
 		db.Close()
 		return nil, err
 	}
-	return &Store{db: db}, nil
+
+	// Панель читает своими соединениями. Пересчёт текущего дня держит пишущее
+	// соединение каждую минуту по полминуты (замер на проде 19.10.2026: 26–28 с
+	// из шестидесяти), и пока чтение шло через него же, панель при открытии
+	// висела на «Загружаю…». В режиме WAL читатель писателя не ждёт.
+	чтение, err := sql.Open("sqlite3_чтение", path+"?_busy_timeout=15000&_query_only=1&_cache_size=-16384")
+	if err != nil {
+		db.Close()
+		return nil, fmt.Errorf("открыть базу для чтения: %w", err)
+	}
+	чтение.SetMaxOpenConns(4)
+	return &Store{db: db, чтение: чтение}, nil
 }
 
 // доправить добавляет колонки, появившиеся после первого выпуска.
@@ -80,5 +105,14 @@ func доправить(db *sql.DB) error {
 	return nil
 }
 
-func (s *Store) DB() *sql.DB  { return s.db }
-func (s *Store) Close() error { return s.db.Close() }
+// DB — пишущее соединение: приём событий, сводки, настройки и раскладка.
+func (s *Store) DB() *sql.DB { return s.db }
+
+// Чтение — соединения для панели. Писать через них нельзя: они открыты
+// только на чтение.
+func (s *Store) Чтение() *sql.DB { return s.чтение }
+
+func (s *Store) Close() error {
+	s.чтение.Close()
+	return s.db.Close()
+}
