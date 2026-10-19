@@ -13,6 +13,7 @@
 import os
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -83,6 +84,34 @@ class ПрогревСтраницы(unittest.TestCase):
                       {"make": ["/нет/такого/файла"], "thumb": self.ист["thumb"]},
                       ждать=True)
         self.assertFalse((self.корень / "раз_512.webp").exists())
+
+    def test_не_успевший_верх_доделывает_фон(self):
+        # Ожидание верха страницы обрывается по сроку, и генератор умирает
+        # вместе с недоделанным. 19.10.2026 под потолком процессора Tessera так
+        # оставались заглушкой «кадр ещё готовится» самые свежие кадры ленты:
+        # фоном шёл только низ страницы. Первый вызов заглушки висит дольше
+        # срока, второй (фоновый) делает кадры сразу.
+        генератор = self.корень / "медленный.sh"
+        генератор.write_text(
+            "#!/bin/sh\n"
+            f'if [ ! -e "{self.корень}/был" ]; then touch "{self.корень}/был"; sleep 5; fi\n'
+            'for id in $(echo "$2" | tr "," " "); do\n'
+            f'  echo кадр > "{self.корень}/${{id}}_512.webp"\n'
+            "done\n")
+        генератор.chmod(0o755)
+        прежний = main.ЖДЁМ_ВЕРХ
+        main.ЖДЁМ_ВЕРХ = 0.5
+        try:
+            main.прогреть([("раз", "a.webp"), ("два", "b.webp")],
+                          {"make": [str(генератор)], "thumb": self.ист["thumb"]}, ждать=True)
+        finally:
+            main.ЖДЁМ_ВЕРХ = прежний
+        for _ in range(40):
+            if all((self.корень / f"{i}_512.webp").exists() for i in ("раз", "два")):
+                break
+            time.sleep(0.1)
+        self.assertTrue((self.корень / "раз_512.webp").exists())
+        self.assertTrue((self.корень / "два_512.webp").exists())
 
 
 if __name__ == "__main__":

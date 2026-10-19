@@ -31,6 +31,9 @@ from urllib.parse import quote
 
 ЗДЕСЬ = os.path.dirname(os.path.abspath(__file__))
 НА_СТРАНИЦЕ = 60
+# Сколько секунд лента ждёт генератор ради верха страницы. Дольше нельзя:
+# ядро обрывает запрос к модулю на пятнадцатой секунде.
+ЖДЁМ_ВЕРХ = 10
 
 # Коллекция файлов в хранилище приложения: её id входит в путь к каждому
 # исходнику. Переопределяется ключом "collection" в module.json.
@@ -489,16 +492,22 @@ def прогреть(кадры, ист, ждать=False):
     потом = [i for i in нет[:60] if i not in set(сразу)]
     try:
         if сразу:
-            subprocess.run([*команда, "--ids", ",".join(сразу)],
-                           timeout=10, check=False,
-                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            try:
+                subprocess.run([*команда, "--ids", ",".join(сразу)],
+                               timeout=ЖДЁМ_ВЕРХ, check=False,
+                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            except subprocess.TimeoutExpired:
+                # Верх не успел, и генератор убит вместе с недоделанным: его
+                # кадры так и остались бы заглушками. Отдаём фону всё, готовое
+                # генератор второй раз не делает.
+                потом = сразу + потом
         if потом:
             subprocess.Popen([*команда, "--ids", ",".join(потом)],
                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                              start_new_session=True)
-    except (OSError, subprocess.TimeoutExpired) as e:
-        # Генератор — чужая программа: не запустился или не успел, лента всё
-        # равно уходит. Промах закроется поштучно, при запросе картинки.
+    except OSError as e:
+        # Генератор — чужая программа: не запустился, а лента всё равно уходит.
+        # Промах закроется поштучно, когда плитка переспросит кадр.
         print(f"генератор миниатюр не отозвался: {e}", file=sys.stderr)
 
 
