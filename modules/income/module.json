@@ -68,6 +68,12 @@
           "src": "income:os"
         },
         {
+          "type": "list",
+          "title": "Реклама по блокам",
+          "span": 12,
+          "src": "income:blocks"
+        },
+        {
           "type": "stat",
           "title": "За год",
           "span": 4,

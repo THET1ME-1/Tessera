@@ -61,6 +61,13 @@ class Строки(unittest.TestCase):
         self.assertNotIn("togetherly_plus", имена)
         self.assertIn("Набор настроений", имена)
 
+    def test_подписка_Fern_тоже_названа_по_человечески(self):
+        # Аккаунт разработчика общий: в отчёте App Store рядом с Плюсом лежит
+        # месячная подписка Fern Pro.
+        сводка = {"sources": {"appstore": {"ok": True, "title": "App Store", "purchases": [
+            {"name": "fern_pro_month", "count": 1, "usd": 3.4}]}}}
+        self.assertEqual(self.таблица(сводка)["rows"][0][0], "Fern Pro на месяц")
+
     def test_средний_чек_считается(self):
         строка = next(r for r in self.таблица()["rows"] if r[1] == "App Store")
         self.assertEqual(строка[2], 4)             # покупок
