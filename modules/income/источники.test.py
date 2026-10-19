@@ -55,5 +55,26 @@ class ПрошлыйМесяц(unittest.TestCase):
         self.assertEqual(self.строки(январская, архив)["lava, все каналы"][3], 7.5)
 
 
+class СегодняУМагазинов(unittest.TestCase):
+    """App Store и Google Play присылают продажи дня только назавтра, и ноль
+    в «Сегодня» читался как поломка (19.10.2026: «почему тут 0 гугл и эпл»)."""
+
+    def строки(self):
+        сводка = dict(СВОДКА, sources=dict(СВОДКА["sources"], appstore={
+            "ok": True, "title": "App Store", "today": 0.0, "month": 391.13}))
+        return {r[0]: r for r in main.блоки(сводка, АРХИВ)["sources"]["rows"]}
+
+    def test_у_магазинов_в_сегодня_прочерк(self):
+        self.assertEqual(self.строки()["App Store"][1], "—")
+        self.assertEqual(self.строки()["Google Play"][1], "—")
+
+    def test_у_рекламы_и_lava_сегодня_числом(self):
+        self.assertEqual(self.строки()["lava, все каналы"][1], 10.0)
+        self.assertEqual(self.строки()["AdMob, реклама"][1], 0.01)
+
+    def test_месяц_у_магазинов_остаётся(self):
+        self.assertEqual(self.строки()["App Store"][2], 391.13)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
