@@ -510,6 +510,15 @@ tr:hover .nm-edit button,.rrow:hover .nm-edit button,.nm-edit button:focus-visib
   font-family:var(--mono);font-size:10px;letter-spacing:.08em;color:var(--ink-3)}
 .shelf figcaption{font-family:var(--mono);font-size:11px;letter-spacing:.05em;color:var(--ink-3);
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* Возраст загрузившего. На кадре — плашкой в правом нижнем углу, тем же
+   кирпичом, что «18+» сверху (слева внизу уже стоит «видео», слева вверху —
+   галочка выбора). Младше 18 выворачивается в контрастную: её ищут глазами. */
+.shelf .age{position:absolute;right:5px;bottom:5px;z-index:1;
+  font-family:var(--mono);font-size:10px;letter-spacing:.04em;line-height:1;
+  padding:3px 4px;border-radius:4px;background:var(--panel);color:var(--ink);
+  border:1px solid var(--line);white-space:nowrap}
+.age.minor,.shelf .age.minor{background:var(--contrast);color:var(--ground);border-color:var(--contrast)}
+.light-bar .age{margin-right:.6em;padding:1px 4px;border-radius:3px}
 /* Лента показывает не всё: фильтр по паре ставит поиск, и без этой плашки
    пустой экран на редкой паре читается как сломанная лента. */
 .shelf-pair{display:flex;align-items:center;gap:9px;margin:0 0 14px;padding:6px 8px 6px 12px;

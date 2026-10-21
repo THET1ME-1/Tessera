@@ -34,8 +34,9 @@ import main  # noqa: E402
 def база(папка):
     путь = os.path.join(папка, "data.db")
     conn = sqlite3.connect(путь)
-    conn.execute("CREATE TABLE media (id TEXT, file TEXT, kind TEXT, group_id TEXT)")
-    conn.executemany("INSERT INTO media VALUES (?,?,?,?)", КАДРЫ)
+    conn.execute("CREATE TABLE media (id TEXT, file TEXT, kind TEXT, group_id TEXT, "
+                 "uid TEXT DEFAULT '')")
+    conn.executemany("INSERT INTO media (id, file, kind, group_id) VALUES (?,?,?,?)", КАДРЫ)
     conn.commit()
     conn.close()
     return путь
@@ -114,7 +115,8 @@ class СчётПоФормату(unittest.TestCase):
         # База изменилась, а кэш ещё свеж: число остаётся прежним. Это и есть
         # цена решения — полчаса лента может показывать вчерашний счёт.
         conn = sqlite3.connect(self.db)
-        conn.execute("INSERT INTO media VALUES ('в3','x_1786968914696_f.mp4','memories','пара1')")
+        conn.execute("INSERT INTO media (id, file, kind, group_id) "
+                     "VALUES ('в3','x_1786968914696_f.mp4','memories','пара1')")
         conn.commit()
         conn.close()
         d = main.лента({"page": "0", "fmt": "Видео"})

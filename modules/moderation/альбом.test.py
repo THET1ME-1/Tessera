@@ -70,8 +70,8 @@ class ЛентаСЗамком(unittest.TestCase):
         путь = str(Path(self.папка.name) / "data.db")
         conn = sqlite3.connect(путь)
         conn.execute("CREATE TABLE media (id TEXT PRIMARY KEY, file TEXT, "
-                     "kind TEXT, group_id TEXT)")
-        conn.executemany("INSERT INTO media VALUES (?,?,?,?)", КАДРЫ)
+                     "kind TEXT, group_id TEXT, uid TEXT DEFAULT '')")
+        conn.executemany("INSERT INTO media (id, file, kind, group_id) VALUES (?,?,?,?)", КАДРЫ)
         conn.commit()
         conn.close()
         self.было_настройки = main.настройки

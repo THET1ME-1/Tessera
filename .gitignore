@@ -9,3 +9,4 @@ dist/
 tessera
 .env
 __pycache__/
+tessera-static
