@@ -491,7 +491,12 @@ tr:hover .nm-edit button,.rrow:hover .nm-edit button,.nm-edit button:focus-visib
   color:var(--ink-3);background:none;border:none;padding:0;text-align:left;cursor:copy;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;width:100%}
 .shelf .pair-id:hover{color:var(--ink-1)}
-.shelf figure{margin:0;display:flex;flex-direction:column;gap:5px;min-width:0;cursor:zoom-in}
+.shelf figure{margin:0;display:flex;flex-direction:column;gap:5px;min-width:0;cursor:zoom-in;
+  /* Удержание отмечает кадр: без этого телефон выделял бы подпись и открывал
+     меню картинки «сохранить, поделиться». */
+  user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+/* Пока что-то выбрано, щелчок по кадру отмечает, а не открывает. */
+.shelf.выбираем figure{cursor:pointer}
 .shelf .ph{aspect-ratio:1;border-radius:var(--r);background:var(--panel-2);overflow:hidden;position:relative}
 .shelf .ph img{width:100%;height:100%;object-fit:cover;display:block}
 .shelf .ph.нет img{display:none}

@@ -569,32 +569,124 @@ function блокShelf(host, d, блок) {
   // сколько их: «Выбрано 14 кадров».
   const полосаВыбора = host.querySelector(".shelf-pick");
   const обновитьПолосу = () => {
+    if (сетка) сетка.classList.toggle("выбираем", моё.выбор.length > 0);
     if (!полосаВыбора) return;
     полосаВыбора.hidden = моё.выбор.length === 0;
     полосаВыбора.querySelector("b").textContent = кадровСловом(моё.выбор.length);
   };
 
-  const отметить = (ид, узел) => {
+  // `надо`: true — отметить, false — снять, не задано — переключить.
+  const отметить = (ид, узел, надо) => {
     const место = моё.выбор.indexOf(ид);
-    const стал = место < 0;
-    if (стал) моё.выбор.push(ид); else моё.выбор.splice(место, 1);
+    const стал = надо === undefined ? место < 0 : надо;
+    if (стал && место < 0) моё.выбор.push(ид);
+    if (!стал && место >= 0) моё.выбор.splice(место, 1);
     узел.classList.toggle("выбран", стал);
     const кнопка = узел.querySelector("[data-pick]");
     if (кнопка) кнопка.setAttribute("aria-pressed", стал ? "true" : "false");
     обновитьПолосу();
+  };
+  // Отмечать можно только кадр с галочкой: без исходника выбор ничего не даст.
+  const можноОтметить = f => !!f.querySelector("[data-pick]");
+  const кадрыСетки = () => Array.from(host.querySelectorAll(".shelf figure"));
+
+  // Отметить всё от кадра-якоря до этого: Shift+щелчок и протягивание после
+  // удержания. Отметки вне диапазона не трогаем — так собирают несколько
+  // кусков ленты подряд.
+  const отметитьДо = f => {
+    const узлы = кадрыСетки();
+    const ids = узлы.map(у => у.dataset.id);
+    const якорь = моё._якорь && ids.includes(моё._якорь) ? моё._якорь : f.dataset.id;
+    for (const ид of диапазонКадров(ids, якорь, f.dataset.id)) {
+      const у = узлы[ids.indexOf(ид)];
+      if (у && можноОтметить(у)) отметить(ид, у, true);
+    }
+  };
+
+  // Удержание пальца или кнопки мыши на кадре отмечает его, как в галерее
+  // телефона. Дальше, не отпуская, можно протянуть по ленте: отметится всё
+  // от первого кадра до того, что под пальцем. Сдвиг больше чем на 10 пикселей
+  // до срабатывания — это прокрутка, а не удержание.
+  const УДЕРЖАНИЕ_МС = 450;
+  const начатьУдержание = (f, e) => {
+    if (e.button > 0 || e.target.closest(".pair-id") || !можноОтметить(f)) return;
+    const x0 = e.clientX, y0 = e.clientY;
+    const отмена = () => {
+      clearTimeout(моё._удержание);
+      removeEventListener("pointermove", сдвиг);
+      removeEventListener("pointerup", отмена);
+      removeEventListener("pointercancel", отмена);
+    };
+    const сдвиг = м => { if (Math.hypot(м.clientX - x0, м.clientY - y0) > 10) отмена(); };
+    addEventListener("pointermove", сдвиг);
+    addEventListener("pointerup", отмена);
+    addEventListener("pointercancel", отмена);
+    моё._удержание = setTimeout(() => {
+      отмена();
+      моё._якорь = f.dataset.id;
+      отметить(f.dataset.id, f, true);
+      // Щелчок, который придёт при отпускании, не должен открыть кадр.
+      моё._глушитьЩелчок = true;
+      if (navigator.vibrate) navigator.vibrate(15);
+      протягивать();
+    }, УДЕРЖАНИЕ_МС);
+  };
+  const протягивать = () => {
+    моё._тянем = true;
+    const ход = м => {
+      const под = document.elementFromPoint(м.clientX, м.clientY);
+      const f = под && под.closest && под.closest(".shelf figure");
+      if (f && host.contains(f)) отметитьДо(f);
+    };
+    const конец = () => {
+      моё._тянем = false;
+      // Щелчок от отпускания приходит сразу за pointerup, в той же задаче. Если
+      // палец отпустили не на кадре (под ним всплыла полоса выбора), щелчка по
+      // кадру не будет вовсе, и без сброса проглотился бы следующий, честный.
+      setTimeout(() => { моё._глушитьЩелчок = false; }, 0);
+      removeEventListener("pointermove", ход);
+      removeEventListener("pointerup", конец);
+      removeEventListener("pointercancel", конец);
+    };
+    addEventListener("pointermove", ход);
+    addEventListener("pointerup", конец);
+    addEventListener("pointercancel", конец);
   };
 
   // Кадры оживают и при первой отрисовке, и после догрузки следующей
   // страницы, поэтому обработчики висят одной функцией, а не разбросаны по
   // блоку.
   const оживитьКадры = узлы => узлы.forEach(f => {
+    f.addEventListener("pointerdown", e => начатьУдержание(f, e));
+    // Удержание на телефоне иначе открывает меню картинки «сохранить, поделиться»,
+    // а мышью картинку начинало бы тащить в другое окно.
+    f.addEventListener("contextmenu", e => { if (моё._глушитьЩелчок || моё._тянем) e.preventDefault(); });
+    f.addEventListener("dragstart", e => e.preventDefault());
     f.addEventListener("click", e => {
+      if (моё._глушитьЩелчок) {
+        моё._глушитьЩелчок = false;
+        return;
+      }
       // Галочка и id пары — свои действия, кадр от них не открывается.
       if (e.target.closest("[data-pick]")) {
+        моё._якорь = f.dataset.id;
         отметить(f.dataset.id, f);
         return;
       }
       if (e.target.closest(".pair-id")) return;
+      // Shift+щелчок отмечает диапазон от прошлого отмеченного кадра.
+      if (e.shiftKey && можноОтметить(f)) {
+        отметитьДо(f);
+        моё._якорь = f.dataset.id;
+        return;
+      }
+      // Пока что-то выбрано, щелчок по кадру отмечает его, а не открывает:
+      // целиться в маленькую галочку на каждом из тридцати кадров долго.
+      if (щелчокОтмечает(моё.выбор) && можноОтметить(f)) {
+        моё._якорь = f.dataset.id;
+        отметить(f.dataset.id, f);
+        return;
+      }
       запомнить(f.dataset.id);
       открытьКадр(показанные, Number(f.dataset.i), моё.origDate);
     });
@@ -619,6 +711,23 @@ function блокShelf(host, d, блок) {
   });
   оживитьКадры(Array.from(host.querySelectorAll(".shelf figure")));
   обновитьПолосу();
+
+  // Протягивание пальцем после удержания: без этого телефон прокручивал бы
+  // страницу вместо того, чтобы отмечать кадры. Слушатель не пассивный —
+  // иначе отменить прокрутку нельзя. Вешается один раз на блок.
+  if (сетка && !сетка._тянемСлушает) {
+    сетка._тянемСлушает = true;
+    сетка.addEventListener("touchmove", e => { if (моё._тянем) e.preventDefault(); },
+                           { passive: false });
+  }
+  // Esc снимает выбор, если лайтбокс не открыт.
+  if (моё._esc) removeEventListener("keydown", моё._esc);
+  моё._esc = e => {
+    if (e.key !== "Escape" || !моё.выбор.length || document.querySelector(".light")) return;
+    const снять = host.querySelector("[data-pick-off]");
+    if (снять) снять.click();
+  };
+  addEventListener("keydown", моё._esc);
 
   // Место запоминается на прокрутке: человек листает ленту часами и в
   // лайтбокс заходит не на каждом кадре. Считаем по первому кадру, который
@@ -873,6 +982,20 @@ function следующаяСтраница(последняя, всегоСтр
    находится и что вообще догрузилось. */
 function показаноСтраниц(первая, последняя) {
   return последняя > первая ? (первая + 1) + "–" + (последняя + 1) : String(первая + 1);
+}
+
+/* Кадры ленты от `от` до `до` включительно, в порядке сетки и в любую
+   сторону. Чего-то из двух нет на странице — только тот, что есть. */
+function диапазонКадров(ids, от, до) {
+  const а = ids.indexOf(от), б = ids.indexOf(до);
+  if (а < 0 && б < 0) return [];
+  if (а < 0 || б < 0) return [ids[Math.max(а, б)]];
+  return ids.slice(Math.min(а, б), Math.max(а, б) + 1);
+}
+
+/* Щелчок по кадру отмечает его, а не открывает, пока выбран хоть один. */
+function щелчокОтмечает(выбор) {
+  return Array.isArray(выбор) && выбор.length > 0;
 }
 
 /* «14 кадров», «21 кадр», «2 кадра». Полоса выбора висит на виду всё время
