@@ -108,6 +108,21 @@ class Подпись(unittest.TestCase):
             main.подписать(путь, "гру", {})
             self.assertEqual(прочитать(путь, "Description")["Description"], "гру")
 
+    def test_возраст_загрузившего_идёт_после_номера_пары(self):
+        # Номер пары остаётся первым словом: двойной щелчок по описанию
+        # по-прежнему выделяет только его.
+        with tempfile.TemporaryDirectory() as папка:
+            путь = файл(папка)
+            main.подписать(путь, "гру12345", {}, 15)
+            в_файле = прочитать(путь, "XMP:Description", "IPTC:Caption-Abstract",
+                                "EXIF:ImageDescription")
+            self.assertEqual(в_файле.get("Description"), "гру12345 · 15 лет")
+
+    def test_слово_после_числа_по_правилам(self):
+        for лет, текст in ((21, "21 год"), (23, "23 года"), (12, "12 лет"),
+                           (14, "14 лет"), (31, "31 год"), (16, "16 лет")):
+            self.assertEqual(main.возраст_словами(лет), текст)
+
     def test_картинка_остаётся_картинкой(self):
         with tempfile.TemporaryDirectory() as папка:
             путь = файл(папка)
@@ -158,6 +173,19 @@ class ПриСкачивании(unittest.TestCase):
         ответ = main.оригинал({"id": "abc123"})
         self.assertEqual(прочитать(ответ["path"], "Description")["Description"],
                          "r61edc1c99483f6")
+
+    def test_в_подписи_возраст_того_кто_загрузил(self):
+        conn = sqlite3.connect(main.настройки()[0]["db"])
+        conn.execute("ALTER TABLE media ADD COLUMN uid TEXT DEFAULT ''")
+        conn.execute("UPDATE media SET uid='u1'")
+        conn.execute("CREATE TABLE users (id TEXT, birth_date TEXT)")
+        conn.execute("INSERT INTO users VALUES ('u1', '2010-01-15 00:00:00.000Z')")
+        conn.commit()
+        conn.close()
+        ответ = main.оригинал({"id": "abc123"})
+        лет = main.полных_лет("2010-01-15")
+        self.assertEqual(прочитать(ответ["path"], "Description")["Description"],
+                         f"r61edc1c99483f6 · {main.возраст_словами(лет)}")
 
     def test_без_даты_если_попросили(self):
         # Тумблер в ленте: дату съёмки ставим не всегда. Выключен — файл уходит
