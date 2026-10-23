@@ -36,9 +36,18 @@ vm.runInContext(readFileSync(new URL("./blocks.js", import.meta.url), "utf8"), �
 const src = "moderation:shelf";
 const моё = мир.память(src);
 
-проверка("пустая память даёт первую страницу без фильтров",
-  мир.ссылкаЛенты(src) === "/tessera/api/query?src=moderation%3Ashelf&page=0",
+// Без выбора лента показывает воспоминания: остальное (холсты, аватарки,
+// виджеты) смотрят реже, а забивает оно ленту наравне со снимками.
+проверка("пустая память даёт первую страницу воспоминаний",
+  мир.ссылкаЛенты(src) === "/tessera/api/query?src=moderation%3Ashelf&page=0&kind=" +
+    encodeURIComponent("Воспоминания"),
   мир.ссылкаЛенты(src));
+
+// «Все» — явный выбор, и на сервер он уходит отсутствием вида.
+моё.kind = "*";
+проверка("«Все» снимает фильтр вида", !мир.ссылкаЛенты(src).includes("kind"),
+  мир.ссылкаЛенты(src));
+delete моё.kind;
 
 Object.assign(моё, { page: 2, kind: "Холсты", adult: "hide", group: "rd656e16ea471f3" });
 const с_парой = мир.ссылкаЛенты(src);

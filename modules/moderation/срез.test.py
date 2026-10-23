@@ -88,6 +88,22 @@ class Срез(unittest.TestCase):
         вторая = main.лента({"page": "1", "adult": "only", "top": str(первая["top"])})
         self.assertEqual(self.ids(вторая), ["к1"])
 
+    def test_лента_называет_свой_вид(self):
+        # Панель сверяет вид сводки со своим и перезапрашивает ленту, только
+        # если они разошлись.
+        self.assertEqual(main.лента({"page": "0", "kind": "Воспоминания"})["kind"],
+                         "Воспоминания")
+        self.assertEqual(main.лента({"page": "0"})["kind"], "")
+
+    def test_сводка_показывает_воспоминания(self):
+        вставить(self.путь, [("х1", "canvas_1.jpg", "canvas", "пара1")])
+        старое = main.убрать_копии
+        main.убрать_копии = lambda корень: None
+        self.addCleanup(lambda: setattr(main, "убрать_копии", старое))
+        лента = main.собрать()["shelf"]
+        self.assertEqual(лента["kind"], "Воспоминания")
+        self.assertNotIn("х1", self.ids(лента))
+
     def test_мусор_вместо_среза_не_роняет_ленту(self):
         d = main.лента({"page": "0", "top": "абв"})
         self.assertEqual(self.ids(d), ["к6", "к5"])
