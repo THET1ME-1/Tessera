@@ -695,4 +695,26 @@ addEventListener("resize", () => {
   таймерРазмера = setTimeout(нарисоватьВкладку, 200);
 });
 
+/* Кнопка «наверх» в правом нижнем углу. Видна, когда страница ушла вниз
+ * дальше экрана: на телефоне до шапки модерации — три экрана ленты.
+ *
+ * Полоса выбора кадров липнет к низу экрана и правым краем закрыла бы кнопку,
+ * поэтому, пока полоса прилипла, кнопка поднимается над ней. */
+function поставитьНаверх() {
+  const кнопка = $("наверх");
+  if (!кнопка) return;
+  кнопка.classList.toggle("видна", scrollY > innerHeight * 0.8);
+  const полоса = document.querySelector(".shelf-pick:not([hidden])");
+  // Прилипшая полоса стоит у самого низа экрана. Когда лента ещё ниже экрана,
+  // полоса тоже там, и уступать ей место незачем.
+  const место = полоса && полоса.getBoundingClientRect();
+  const прилипла = место && место.top < innerHeight && место.bottom > innerHeight - 24;
+  кнопка.style.setProperty("--над", прилипла ? полоса.offsetHeight + 8 + "px" : "0px");
+}
+addEventListener("scroll", поставитьНаверх, { passive: true });
+$("наверх").addEventListener("click", () => {
+  const плавно = !matchMedia("(prefers-reduced-motion: reduce)").matches;
+  scrollTo({ top: 0, behavior: плавно ? "smooth" : "auto" });
+});
+
 запустить();
