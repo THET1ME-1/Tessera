@@ -613,6 +613,7 @@ function блокShelf(host, d, блок) {
     const x0 = e.clientX, y0 = e.clientY;
     const отмена = () => {
       clearTimeout(моё._удержание);
+      моё._удержали = null;
       removeEventListener("pointermove", сдвиг);
       removeEventListener("pointerup", отмена);
       removeEventListener("pointercancel", отмена);
@@ -621,15 +622,17 @@ function блокShelf(host, d, блок) {
     addEventListener("pointermove", сдвиг);
     addEventListener("pointerup", отмена);
     addEventListener("pointercancel", отмена);
-    моё._удержание = setTimeout(() => {
+    моё._удержали = () => {
       отмена();
       моё._якорь = f.dataset.id;
       отметить(f.dataset.id, f, true);
-      // Щелчок, который придёт при отпускании, не должен открыть кадр.
+      // Щелчок, который придёт при отпускании, не должен ни открыть кадр, ни
+      // снять только что поставленную отметку.
       моё._глушитьЩелчок = true;
       if (navigator.vibrate) navigator.vibrate(15);
       протягивать();
-    }, УДЕРЖАНИЕ_МС);
+    };
+    моё._удержание = setTimeout(моё._удержали, УДЕРЖАНИЕ_МС);
   };
   const протягивать = () => {
     моё._тянем = true;
@@ -639,11 +642,10 @@ function блокShelf(host, d, блок) {
       if (f && host.contains(f)) отметитьДо(f);
     };
     const конец = () => {
+      // Глушилку щелчка здесь не снимаем: от пальца щелчок приходит не сразу
+      // за pointerup, а отдельной задачей, и снимал отметку, которую только
+      // что поставило удержание. Её снимает следующее касание кадра.
       моё._тянем = false;
-      // Щелчок от отпускания приходит сразу за pointerup, в той же задаче. Если
-      // палец отпустили не на кадре (под ним всплыла полоса выбора), щелчка по
-      // кадру не будет вовсе, и без сброса проглотился бы следующий, честный.
-      setTimeout(() => { моё._глушитьЩелчок = false; }, 0);
       removeEventListener("pointermove", ход);
       removeEventListener("pointerup", конец);
       removeEventListener("pointercancel", конец);
@@ -657,10 +659,24 @@ function блокShelf(host, d, блок) {
   // страницы, поэтому обработчики висят одной функцией, а не разбросаны по
   // блоку.
   const оживитьКадры = узлы => узлы.forEach(f => {
-    f.addEventListener("pointerdown", e => начатьУдержание(f, e));
+    f.addEventListener("pointerdown", e => {
+      // Новое касание: щелчок от прошлого удержания уже пришёл или не придёт
+      // вовсе (палец отпустили над полосой выбора), и честный глушить нельзя.
+      моё._глушитьЩелчок = false;
+      моё._палец = e.pointerType === "touch";
+      начатьУдержание(f, e);
+    });
     // Удержание на телефоне иначе открывает меню картинки «сохранить, поделиться»,
-    // а мышью картинку начинало бы тащить в другое окно.
-    f.addEventListener("contextmenu", e => { if (моё._глушитьЩелчок || моё._тянем) e.preventDefault(); });
+    // а мышью картинку начинало бы тащить в другое окно. Android считает
+    // долгое нажатие своим таймером и бывает быстрее нашего: тогда его
+    // contextmenu и есть удержание, иначе меню всплывёт, а отметки не будет.
+    f.addEventListener("contextmenu", e => {
+      if (моё._палец && моё._удержали) {
+        clearTimeout(моё._удержание);
+        моё._удержали();
+      }
+      if (моё._палец || моё._глушитьЩелчок || моё._тянем) e.preventDefault();
+    });
     f.addEventListener("dragstart", e => e.preventDefault());
     f.addEventListener("click", e => {
       if (моё._глушитьЩелчок) {
