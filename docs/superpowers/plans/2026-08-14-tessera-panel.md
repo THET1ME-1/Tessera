@@ -15,7 +15,7 @@
 
 **Спека:** `docs/superpowers/specs/2026-08-14-tessera-core-design.md`
 **Макет:** https://claude.ai/code/artifact/89b534c7-0826-419b-bb9d-d343ee252e50
-(исходники — `~/Projects/tessera-mockup`)
+(исходники — `~/Projects/GitHub/tessera-mockup`)
 
 ## Общие требования
 
@@ -36,7 +36,7 @@
 
 - [ ] **Шаг 1: Перенести облик из макета**
 
-Взять `~/Projects/tessera-mockup/tessera.html`, оставить стили, шрифты,
+Взять `~/Projects/GitHub/tessera-mockup/tessera.html`, оставить стили, шрифты,
 тултип, переключатель темы и каркас шапки. Выбросить `const DATA`, все
 функции вкладок (`viewOverview`, `viewScreens`, …) и жёсткий список `TABS`.
 

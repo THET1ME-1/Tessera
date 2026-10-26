@@ -23,6 +23,7 @@ import mimetypes
 import os
 import re
 import shutil
+import signal
 import sqlite3
 import subprocess
 import sys
@@ -35,6 +36,8 @@ from urllib.parse import quote
 # Сколько секунд лента ждёт генератор ради верха страницы. Дольше нельзя:
 # ядро обрывает запрос к модулю на пятнадцатой секунде.
 ЖДЁМ_ВЕРХ = 10
+# Сколько секунд плитка ждёт генератор ради одного своего кадра.
+ЖДЁМ_КАДР = 8
 
 # Коллекция файлов в хранилище приложения: её id входит в путь к каждому
 # исходнику. Переопределяется ключом "collection" в module.json.
@@ -469,6 +472,29 @@ def верх_хранилища(conn):
     return conn.execute("SELECT max(rowid) FROM media").fetchone()[0] or 0
 
 
+def сделать_кадры(команда, ids, срок):
+    """Зовёт генератор и ждёт его не дольше срока.
+
+    Генератор тянет исходники из бакета дочерним rclone. Убить по сроку один
+    генератор мало: rclone живёт дальше со своими двумя минутами и повторами.
+    26.10.2026 бакет подвис, брошенные выкачки висели до семи минут, плитки
+    переспрашивали кадры и плодили новые. Поэтому генератор идёт своей группой
+    процессов, и на сроке гаснет вся группа.
+    """
+    процесс = subprocess.Popen([*команда, "--ids", ",".join(ids)],
+                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                               start_new_session=True)
+    try:
+        процесс.wait(timeout=срок)
+    except subprocess.TimeoutExpired:
+        try:
+            os.killpg(процесс.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        процесс.wait()
+        raise
+
+
 def прогреть(кадры, ист, ждать=False):
     """Просит генератор сделать миниатюры для тех кадров, которых ещё нет.
 
@@ -526,9 +552,7 @@ def прогреть(кадры, ист, ждать=False):
     try:
         if сразу:
             try:
-                subprocess.run([*команда, "--ids", ",".join(сразу)],
-                               timeout=ЖДЁМ_ВЕРХ, check=False,
-                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                сделать_кадры(команда, сразу, ЖДЁМ_ВЕРХ)
             except subprocess.TimeoutExpired:
                 # Верх не успел, и генератор убит вместе с недоделанным: его
                 # кадры так и остались бы заглушками. Отдаём фону всё, готовое
@@ -893,8 +917,7 @@ def миниатюра(параметры):
     команда = ист.get("make")
     if команда:
         try:
-            subprocess.run([*команда, "--ids", id_], timeout=8, check=False,
-                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            сделать_кадры(команда, [id_], ЖДЁМ_КАДР)
         except (OSError, subprocess.TimeoutExpired) as e:
             print(f"генератор миниатюр не отозвался: {e}", file=sys.stderr)
         for w in [хотят, "512", "1600"]:
