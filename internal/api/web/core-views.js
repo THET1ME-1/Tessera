@@ -9,7 +9,28 @@
 
 /* Подпись периода берётся из выбранной кнопки, а не пишется в блоке числом:
    иначе «за 30 дней» остаётся стоять и когда открыты семь суток. */
-const периодСловами = () => ({ '7d': '7 суток', '15d': '15 суток', '30d': '30 суток', all: 'всё время' })[state.range] || state.range;
+const периодСловами = () => {
+  const [с, по] = String(state.range).split('..');
+  if (по) return day(с) + ' – ' + day(по);
+  return ({ '7d': '7 суток', '15d': '15 суток', '30d': '30 суток', all: 'всё время' })[state.range] || state.range;
+};
+/* Окно под сеткой «Люди по дням» — период всего обзора: сутки, сборки,
+   платформы, экраны и действия считаются за те же дни. Ядро спрашивается
+   заново, когда окно отпустили, а не на каждый сдвиг ручки. */
+let окноТаймер = 0;
+function синхронизироватьОкно() {
+  const H = ИСТОРИЯ();
+  if (state.tab !== 'overview' || !H.length || winFrom < 0) return;
+  const нужно = `${H[winFrom].d}..${H[winTo - 1].d}`;
+  clearTimeout(окноТаймер);
+  if (state.range === нужно) return;
+  окноТаймер = setTimeout(async () => {
+    state.range = нужно;
+    ядроКогда = 0;
+    await загрузитьЯдро();
+    if (state.tab === 'overview' && state.range === нужно) перерисоватьЯдро();
+  }, 400);
+}
 const виду = html => { document.getElementById('view').innerHTML = html + подвал(); };
 const подвал = () => {
   const своё = (DATA.apps || []).find(a => a.id === state.app);
@@ -179,7 +200,7 @@ function viewOverview() {
       есть ? `<div id="people-days"></div><div id="brush"></div><div class="mtabs" id="pd-tabs"></div>`
            : '<p class="block-empty">Людей пока не видели: включите счёт людей в SDK, и столбики появятся со следующих суток.</p>') +
     `<div class="grid g-75">` +
-      card('clock', 'Сутки', `Людей в час · ${tzName(tz)} · среднее за 14 дней`, hMax ? `<span class="badge">пик ${String(h.indexOf(hMax)).padStart(2, '0')}:00</span>` : '',
+      card('clock', 'Сутки', `Людей в час · ${tzName(tz)} · среднее за ${winFrom >= 0 && H[winTo - 1] ? day(H[winFrom].d) + ' – ' + day(H[winTo - 1].d) : '14 дней'}`, hMax ? `<span class="badge">пик ${String(h.indexOf(hMax)).padStart(2, '0')}:00</span>` : '',
         hMax ? `<div class="dial-wrap"><div class="dial" id="hours"></div>
           <div class="dial-side">
             <div class="ds"><span class="k">Пик</span><b>${String(h.indexOf(hMax)).padStart(2, '0')}:00</b><span class="s">≈ ${n(hMax)} человек в час</span></div>
@@ -290,6 +311,7 @@ function peopleDays() {
     `<div class="mtab"><span class="k"><span class="ti">${svg('clock')}</span>Самые людные часы</span><b class="v">${peak.v ? SLOT(peak.k).replace(/:00/g, '') : '—'}</b><span class="s">${peak.v ? `≈ ${n(peak.v)} человек в час · ${tzName(tz)}` : 'часов ещё нет'}</span></div>`;
   document.getElementById('pd-range').textContent = `${day(list[0].d)} – ${day(list.at(-1).d)} · столбик = сутки, квадратик = 3 часа · время: ${tzName(tz)}`;
   живойОнлайн();
+  синхронизироватьОкно();
 }
 /* Сейчас в приложении: живое число модуля с разбивкой по системам. У
    приложения без такого модуля — люди за сегодня из сводки ядра. */
@@ -540,9 +562,11 @@ function dial(el, h) {
   rest();
   document.getElementById('dial-now').innerHTML = `<span class="k"><i class="nowdot"></i>Сейчас у вас</span><b>${String(now).padStart(2, '0')}:00</b><span class="s">обычно ≈ ${n(h[now])} человек в час</span>`;
 }
-/* среднее людей в каждый местный час за последние 14 полных суток */
+/* среднее людей в каждый местный час за полные сутки выбранного окна
+   (пока окно не встало — за последние 14) */
 function peopleHours() {
-  const hours = localHours(tz), ds = ИСТОРИЯ().filter(x => !x.partial).slice(-14).map(x => x.d);
+  const H = ИСТОРИЯ(), окно = winFrom >= 0 ? H.slice(winFrom, winTo) : H.slice(-14);
+  const hours = localHours(tz), ds = окно.filter(x => !x.partial).map(x => x.d);
   return Array.from({ length: 24 }, (_, k) => { const v = ds.map(d => hours[d]?.[k]).filter(x => x != null); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : 0; });
 }
 
