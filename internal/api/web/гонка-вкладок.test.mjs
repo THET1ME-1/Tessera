@@ -40,17 +40,19 @@ await page.route(/\/api\/core/, async route => {
   await route.continue();
 });
 
-// Смена периода сбрасывает кэш ядра, и обзор идёт за данными заново.
-await page.click('[data-tab="overview"]');
-await page.click('[data-range="7d"]');
+// Смена периода сбрасывает кэш ядра, и вкладка идёт за данными заново.
+// Период живёт в фильтре «Экранов».
+await page.click('[data-tab="screens"]');
+await page.waitForSelector('[data-range-s="7d"]', { timeout: 15000 });
+await page.click('[data-range-s="7d"]');
 await page.waitForTimeout(200);
 await page.click('[data-tab="club"]');
 await page.waitForTimeout(3500);
 
 const вид = await page.evaluate(() => ({
   текст: document.getElementById("view").innerText,
-  блоков: document.querySelectorAll("#view .panel").length,
-  вкладка: document.querySelector('[data-tab][aria-selected="true"]')?.dataset.tab,
+  блоков: document.querySelectorAll("#view .card").length,
+  вкладка: document.querySelector('.nav a[aria-current="page"]')?.dataset.tab,
 }));
 проверка("нет строки «не открылась»", !вид.текст.includes("не открылась"),
   вид.текст.split("\n")[0]);
@@ -60,20 +62,15 @@ const вид = await page.evaluate(() => ({
 // Два экрана ядра подряд, пока ядро грузилось: открыться должен второй, и
 // запоздавший первый не имеет права перерисовать его своим.
 await page.click('[data-tab="overview"]');
-await page.waitForTimeout(3500);
-// Вкладка модуля гасит период, если ни один её блок его не слушает. Экран
-// ядра обязан зажечь его обратно — раньше кнопки оставались мёртвыми.
-const период = await page.evaluate(() =>
-  [...document.querySelectorAll("[data-range]")].every(b => !b.disabled));
-проверка("на обзоре после модуля период снова нажимается", период);
-await page.click('[data-range="15d"]', { timeout: 3000 });
-await page.waitForTimeout(200);
+await page.waitForTimeout(150);
 await page.click('[data-tab="people"]');
-await page.waitForTimeout(3500);
+await page.waitForTimeout(4500);
 const люди = await page.evaluate(() => ({
   текст: document.getElementById("view").innerText,
-  вкладка: document.querySelector('[data-tab][aria-selected="true"]')?.dataset.tab,
+  вкладка: document.querySelector('.nav a[aria-current="page"]')?.dataset.tab,
 }));
+проверка("на «Людях» нарисованы «Люди», а не запоздавший обзор",
+  люди.текст.includes("Приход и возврат") && !люди.текст.includes("Куда уходит время"), люди.текст.split("\n")[0]);
 проверка("экран ядра после быстрой смены открылся", !люди.текст.includes("не открылась"),
   люди.текст.split("\n")[0]);
 проверка("выбрана вкладка «Люди»", люди.вкладка === "people", люди.вкладка);

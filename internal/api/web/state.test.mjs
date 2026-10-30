@@ -93,7 +93,7 @@ if (поиск) {
 // ── поворот экрана: ширина меняется, перерисовка нужна ──
 await page.setViewportSize({ width: 844, height: 390 });
 await page.waitForTimeout(1200);
-const живо = await page.evaluate(() => !!document.querySelector(".panel"));
+const живо = await page.evaluate(() => !!document.querySelector("#view .card"));
 проверка("после поворота панель на месте", живо);
 
 await browser.close();

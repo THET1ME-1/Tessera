@@ -32,57 +32,75 @@ function число(v, формат) {
 }
 
 /* ── stat: крупное число, разбивка, прирост ─────────────────────────────── */
-function блокStat(host, d) {
+function блокStat(host, d, блок, шапка) {
   const части = (d.parts || []).map(p =>
-    '<span class="stat-part"><i></i>' + p.name + " " + число(p.value, d.format) + "</span>").join("");
-  const дельта = d.delta === undefined || d.delta === null ? "" :
-    '<span class="delta' + (d.delta < 0 ? " down" : "") + '">' +
-    (d.delta >= 0 ? "↑ " : "↓ ") + Math.abs(d.delta).toFixed(0) + "%</span>";
-  host.innerHTML =
+    '<span class="stat-part"><i></i>' + esc(p.name) + " <b>" + число(p.value, d.format) + "</b></span>").join("");
+  if (d.delta !== undefined && d.delta !== null && шапка)
+    шапка.insertAdjacentHTML("beforeend", '<span class="delta' + (d.delta < 0 ? " down" : "") + '">' + pctd(d.delta) + "</span>");
+  host.innerHTML = '<div class="stat">' +
     '<div class="stat-val num">' + число(d.value, d.format) + "</div>" +
-    (дельта ? '<div style="margin:8px 0 0">' + дельта + "</div>" : "") +
-    (d.sub ? '<div class="stat-sub">' + d.sub + "</div>" : "") +
-    (части ? '<div class="stat-parts">' + части + "</div>" : "");
+    (d.sub ? '<div class="stat-sub">' + esc(d.sub) + "</div>" : "") +
+    (части ? '<div class="stat-parts">' + части + "</div>" : "") + "</div>";
   if (d.spark && d.spark.length) {
     const s = document.createElement("span");
-    host.appendChild(s);
+    s.className = "spark";
+    host.firstChild.appendChild(s);
     spark(s, d.spark);
   }
 }
 
+/* Подпись карточки под заголовком: блок вправе уточнить, что он показывает,
+   вместо имени модуля. */
+function подписать(шапка, текст) {
+  const p = шапка && шапка.parentElement.querySelector("h2 + p");
+  if (p && текст) p.textContent = текст;
+  else if (шапка && текст) шапка.previousElementSibling.insertAdjacentHTML("beforeend", "<p>" + esc(текст) + "</p>");
+}
+/* Ступень цвета по месту в рейтинге: темнее — больше. «Прочее» и
+   «не определено» — серым: это не величина, а остаток. */
+const ОСТАТОК = /^(прочее|остальное|не определено|неизвестно|другое)$/i;
+const тонМеста = (имя, i) => ОСТАТОК.test(String(имя).trim()) ? "z" : ["t1", "t2", "t3", "t4", "t5"][Math.min(i, 4)];
+
 /* ── columns: столбики по дням ──────────────────────────────────────────── */
-function блокColumns(host, d) {
-  const items = (d.items || []).map((it, i) => ({
-    parts: (it.parts || []).map(p => ({
-      v: p.v,
-      color: p.style === "hatch" ? "var(--serie-2)" : "var(--serie-1)",
-      hatch: p.style === "hatch",
-    })),
-    tick: (i % 2 === 0 || i === d.items.length - 1) ? подписьДня(it.label) : "",
-    tipTitle: подписьДня(it.label),
-    tipLines: [(it.parts || []).reduce((s, p) => s + p.v, 0).toLocaleString("ru") +
-               " " + (d.unit || "")],
-  }));
+/* Столбики с подписями. Блок может принести `with.now` — текущее число того
+   же ряда (у дохода месяц по нашим чекам больше, чем в архиве магазинов):
+   тогда над последним столбиком встаёт пунктир до него. `with.year` — итог
+   года плашкой в шапке. Мелкие ряды (до года назад, по 0,1 доллара) не
+   рисуются: столбик в один пиксель ничего не говорит. */
+function блокColumns(host, d, блок, шапка) {
+  const все = (d.items || []).map(it => ({ label: it.label, v: (it.parts || []).reduce((s, p) => s + (p.v || 0), 0), parts: it.parts || [] }));
+  const крупный = Math.max(0, ...все.map(i => i.v));
+  const items = все.length > 4 && d.format === "money" ? все.filter(i => i.v > крупный / 1000) : все;
   if (!items.length) return пусто(host, "за этот период ничего не пришло");
-
-  // Один день-всплеск делает остальные пятнадцать неразличимыми, поэтому
-  // шкала режется по медиане, а срезанные столбики помечаются.
-  const суммы = items.map(i => i.parts.reduce((s, p) => s + p.v, 0)).sort((a, b) => a - b);
-  const медиана = суммы[Math.floor(суммы.length / 2)] || 0;
-  const максимум = суммы[суммы.length - 1] || 0;
-  const порог = медиана * 5;
-  // Обрезаем, только когда точек много и всплеск одиночный. Пять месяцев,
-  // где каждый следующий больше предыдущего, — это рост, а не выброс.
-  const последнийСамый = items.length &&
-    items[items.length - 1].parts.reduce((s, p) => s + p.v, 0) === максимум;
-  const режем = медиана > 0 && максимум > порог && items.length >= 10 && !последнийСамый;
-
-  columns(host, items, { h: 240, max: режем ? порог : undefined });
-  if (режем) {
-    host.insertAdjacentHTML("beforeend",
-      '<p class="block-note">Шкала обрезана по медиане: иначе всплеск в ' +
-      fmt(максимум) + " кладёт остальные дни в плинтус.</p>");
-  }
+  const с = d.with || {}, сейчас = с.now && typeof с.now.value === "number" ? с.now.value : null;
+  if (с.year && typeof с.year.value === "number" && шапка)
+    шапка.insertAdjacentHTML("beforeend", '<span class="badge">за год ' + число(с.year.value, с.year.format || d.format) + "</span>");
+  // Один день-всплеск делает остальные неразличимыми, поэтому шкала режется
+  // по медиане, а срезанный столбик подписан своим числом.
+  const суммы = items.map(i => i.v).sort((a, b) => a - b);
+  const медиана = суммы[Math.floor(суммы.length / 2)] || 0, максимум = суммы.at(-1) || 0;
+  const последнийСамый = items.at(-1).v === максимум;
+  const режем = медиана > 0 && максимум > медиана * 5 && items.length >= 10 && !последнийСамый;
+  const верх = nice((режем ? медиана * 5 : Math.max(максимум, сейчас || 0)) * 1.05), шаг = nice(верх / 4), H = 190;
+  const подписи = items.length <= 14;
+  const деления = Array.from({ length: Math.floor(верх / шаг) + 1 }, (_, i) => i * шаг);
+  const кратко = v => d.format === "money" ? число(v, "money").replace(/,\d+/, "") : short(v);
+  host.innerHTML = '<div class="mb"><div class="ry" style="height:' + H + 'px">' +
+      деления.map(t => '<span style="top:' + (1 - t / верх) * 100 + '%">' + short(t) + "</span>").join("") + "</div>" +
+    '<div class="mb-plot" style="height:' + H + 'px">' + деления.slice(1).map(t => '<div class="gl" style="bottom:' + t / верх * 100 + '%"></div>').join("") +
+    '<div class="mb-cols" style="gap:' + (items.length > 20 ? 3 : items.length > 10 ? 6 : 14) + 'px">' + items.map((it, i) => {
+      const last = i === items.length - 1, ext = last && сейчас !== null && сейчас > it.v;
+      const v = Math.min(it.v, верх), сверху = ext ? сейчас : it.v;
+      return '<div class="mb-c' + (last ? " on" : "") + '" title="' + подписьДня(it.label) + ": " + число(it.v, d.format) + '">' +
+        (ext ? '<i class="mb-ext" style="height:' + Math.min(100, сейчас / верх * 100) + '%"></i>' : "") +
+        '<i class="' + (last ? "t1" : "t4") + '" style="height:' + (v / верх * 100) + '%"></i>' +
+        (подписи || (it.v > верх && it.v === максимум) ? '<span class="mb-v" style="bottom:' + Math.min(100, сверху / верх * 100) + '%">' + кратко(сверху) + "</span>" : "") + "</div>";
+    }).join("") + "</div></div></div>" +
+    '<div class="mb-x" style="gap:' + (items.length > 20 ? 3 : items.length > 10 ? 6 : 14) + 'px">' +
+      items.map((it, i) => "<span>" + (подписи || i % Math.ceil(items.length / 8) === 0 ? подписьДня(it.label) : "") + "</span>").join("") + "</div>" +
+    (сейчас !== null && сейчас > items.at(-1).v
+      ? '<p class="hint" style="padding:12px 18px 14px">Пунктир над последним столбиком — то, что уже посчитано сейчас, но ещё не легло в архив: столбик дорастёт сам.</p>'
+      : режем ? '<p class="hint" style="padding:12px 18px 14px">Шкала обрезана по медиане: иначе всплеск в ' + fmt(максимум) + " кладёт остальные дни в плинтус.</p>" : '<div style="height:12px"></div>');
 }
 
 /* Шаг растра: круглое число, при котором у лидера выходит десяток-другой
@@ -98,33 +116,42 @@ function подобратьШаг(наибольшее) {
 }
 
 function подписьДня(l) {
+  if (/^\d{4}-\d{2}$/.test(l)) return MONS[Number(l.slice(5)) - 1];
   if (!/^\d{4}-\d{2}-\d{2}$/.test(l)) return l;
   const [, m, d] = l.split("-");
   return Number(d) + NBSP + MONTHS[Number(m) - 1];
 }
 
 /* ── raster: ряды кусочков ──────────────────────────────────────────────── */
-function блокRaster(host, d) {
-  const rows = (d.rows || []).slice().sort((a, b) => b.value - a.value);
+/* Растр: всё целое кусочками одного размера, цвет — место в рейтинге,
+   подписи сбоку (широкий блок) или снизу (узкий). Наведение на строку
+   подсвечивает её кусочки. Шаг кусочка круглый, чтобы целого выходило от
+   шестидесяти до четырёхсот: меньше — не на что смотреть, больше — каша. */
+function блокRaster(host, d, блок, шапка) {
+  const rows = (d.rows || []).filter(r => r.value > 0).sort((a, b) =>
+    (ОСТАТОК.test(String(a.name).trim()) - ОСТАТОК.test(String(b.name).trim())) || b.value - a.value);
   if (!rows.length) return пусто(host, "нечего показывать");
-  const наибольшее = Math.max(...rows.map(r => r.value));
-  // Шаг, присланный модулем, может не подойти данным: тысяча файлов на
-  // кусочек при значениях в десятки даёт один кусочек, растянутый во всю
-  // ширину. В таком случае шаг подбирается сам — по 1, 2 или 5 на порядок.
+  const всего = rows.reduce((s, r) => s + r.value, 0);
   let unit = d.unit || 1;
-  if (наибольшее / unit < 5 || наибольшее / unit > 400) unit = подобратьШаг(наибольшее);
-  const maxN = Math.max(1, Math.ceil(наибольшее / unit));
-  host.innerHTML = rows.map(r => {
-    const n = Math.max(1, Math.round(r.value / unit));
-    const cells = Array.from({ length: n }, (_, i) =>
-      '<rect x="' + (i * 8) + '" y="0" width="6" height="6" rx="1.6" fill="' +
-      (i < n - 1 || n === 1 ? "var(--serie-1)" : "var(--serie-2)") + '"/>').join("");
-    return '<div class="rrow">' + nameCell(r.name, true) +
-      '<svg viewBox="0 0 ' + (maxN * 8) + ' 6" preserveAspectRatio="xMinYMid meet">' + cells + "</svg>" +
-      '<span class="rv">' + число(r.value, d.format) + "</span></div>";
-  }).join("") +
-    '<p class="block-note">Один кусочек — ' + fmt(unit) + " " +
-      (d.unitLabel || "единиц").replace(/ на кусочек$/, "") + "</p>";
+  if (всего / unit < 60 || всего / unit > 400) {
+    unit = Math.pow(10, Math.floor(Math.log10(всего / 400)));
+    for (const м of [1, 2, 5, 10, 20, 50]) if (всего / (unit * м) <= 400) { unit *= м; break; }
+  }
+  const кусков = Math.max(1, Math.round(всего / unit)), доли = share(rows.map(r => r.value), кусков);
+  const узкий = (блок && блок.span || 12) <= 7;
+  const колонок = Math.max(16, Math.min(узкий ? 31 : 34, Math.round(Math.sqrt(кусков * (узкий ? 6 : 4)))));
+  const ед = (d.unitLabel || "").replace(/ на кусочек$/, "") || "единиц";
+  подписать(шапка, "Кусочек — " + (d.format === "money" ? число(unit, "money") : fmt(unit) + " " + ед) + " · всего " + число(всего, d.format));
+  const крохотный = (блок && блок.span || 12) <= 4;
+  host.innerHTML = '<div class="mr-wrap' + (узкий ? " narrow" : "") + (крохотный ? " tiny" : "") + '"><div class="mr" style="--mr-cols:' + колонок + '">' +
+      доли.flatMap((c, i) => Array(c).fill('<i class="' + тонМеста(rows[i].name, i) + '" data-k="' + i + '"></i>')).join("") + "</div>" +
+    '<div class="mr-side">' + rows.map((r, i) => '<div class="mr-l" data-k="' + i + '"><i class="' + тонМеста(r.name, i) + '"></i><span>' + esc(nameOf(r.name)) + "</span>" +
+      "<b>" + число(r.value, d.format) + "</b><small>" + (r.value / всего * 100 < 1 ? dec(r.value / всего * 100) : Math.round(r.value / всего * 100)) + " %</small></div>").join("") + "</div></div>";
+  const wrap = host.firstChild;
+  wrap.querySelectorAll("[data-k]").forEach(x => {
+    x.addEventListener("pointerenter", () => { wrap.classList.add("focus"); wrap.querySelectorAll("[data-k]").forEach(y => y.classList.toggle("on", y.dataset.k === x.dataset.k)); });
+    x.addEventListener("pointerleave", () => wrap.classList.remove("focus"));
+  });
 }
 
 /* ── table: таблица с полосой ───────────────────────────────────────────── */
@@ -150,7 +177,7 @@ function блокTable(host, d) {
   const справа = (d.cols || []).map((_, i) => i > 0 &&
     rows.some(r => числоЛи(r[i])) &&
     rows.every(r => числоЛи(r[i]) || r[i] === null || r[i] === undefined || r[i] === "—"));
-  host.innerHTML = '<div style="overflow-x:auto"><table class="tbl"><thead><tr>' +
+  host.innerHTML = '<div class="table-wrap"><table class="tbl"><thead><tr>' +
     (d.cols || []).map((c, i) => "<th" + (справа[i] ? ' class="r"' : "") + ">" + c + "</th>").join("") +
     (сПолосой ? '<th class="barcell">Доля</th>' : "") + "</tr></thead><tbody>" +
     rows.map(r => "<tr>" +
@@ -166,13 +193,114 @@ function блокTable(host, d) {
 }
 
 /* ── list: строки «имя — число» ─────────────────────────────────────────── */
+/* Список: доля каждого полосой сверху и строки с числом и процентом. */
 function блокList(host, d) {
   const items = d.items || [];
   if (!items.length) return пусто(host, "пусто");
-  host.innerHTML = items.map(i =>
-    '<div class="lrow"><span>' + i.name + '</span><span class="num">' +
-    число(i.value, d.format) + "</span></div>"
-  ).join("");
+  const всего = items.reduce((s, i) => s + (Number(i.value) || 0), 0) || 1, видно = items.filter(i => i.value > 0);
+  host.innerHTML = (видно.length > 1 ? '<div class="pad" style="padding-bottom:6px"><div class="ib-bar" style="margin:0">' +
+      видно.map((i, k) => '<i class="' + тонМеста(i.name, k) + '" style="flex:' + Math.max(i.value, всего * .006) + '"></i>').join("") + "</div></div>" : "") +
+    '<div class="lrows">' + items.map((i, k) =>
+      '<div class="lrow"><i class="' + тонМеста(i.name, k) + '"></i><span>' + esc(nameOf(i.name)) + "</span><b>" +
+      число(i.value, d.format) + "</b><small>" + (i.value ? dec(i.value / всего * 100) + " %" : "—") + "</small></div>").join("") + "</div>";
+}
+
+/* Строки с полосой: таблица, у которой первая колонка — имя, одна колонка —
+   величина (barCol), а остальные идут мелкой строкой под именем. Так покупки
+   читаются как список, а не как бухгалтерская ведомость. */
+function блокRows(host, d, блок, шапка) {
+  const rows = d.rows || [], cols = d.cols || [];
+  if (!rows.length) return пусто(host, "строк нет");
+  const bar = d.barCol === undefined ? cols.length - 1 : d.barCol;
+  const форма = i => d.formats ? d.formats[i] : d.format;
+  const max = Math.max(1, ...rows.map(r => Number(r[bar]) || 0));
+  const штук = cols.findIndex(c => /^(штук|шт|раз|покупок)$/i.test(c));
+  if (штук > 0 && шапка) шапка.insertAdjacentHTML("beforeend", '<span class="badge">' + n(rows.reduce((s, r) => s + (Number(r[штук]) || 0), 0)) + " " + cols[штук].toLowerCase() + "</span>");
+  const мелко = r => r.map((v, i) => i === 0 || i === bar || v === null || v === "" ? null
+    : числоЛи(v) ? (форма(i) === "money" ? cols[i].toLowerCase() + " " + число(Number(v), "money") : fmt(Number(v)) + " " + cols[i].toLowerCase()) : esc(v)).filter(Boolean).join(" · ");
+  host.innerHTML = '<div class="ls">' + rows.map(r => '<div class="ls-r"><span class="ls-ic">' + svg(/подар/i.test(r[0]) ? "gift" : (блок && блок.icon) || "card") + "</span>" +
+    '<div class="act-nm"><b>' + esc(r[0]) + "</b><small>" + мелко(r) + '</small><span class="ls-bar"><i class="t1" style="width:' + ((Number(r[bar]) || 0) / max * 100) + '%"></i></span></div>' +
+    '<div class="r"><b>' + число(Number(r[bar]) || 0, форма(bar)) + "</b></div></div>").join("") + "</div>";
+}
+
+/* Доход и выручка на тысячу показов. Число показов модуль даёт полем
+   `shows`; старые сводки прятали его в имя («Сундук · 216 144 показов»). */
+function блокRate(host, d, блок, шапка) {
+  const items = (d.items || []).map(i => {
+    const m = String(i.name).match(/^(.*) · ([\d\s ]+) показов$/);
+    const shows = i.shows !== undefined ? Number(i.shows) : m ? Number(m[2].replace(/\D/g, "")) : 0;
+    return { name: m ? m[1] : i.name, shows, value: Number(i.value) || 0, ecpm: shows ? (Number(i.value) || 0) / shows * 1000 : 0 };
+  }).sort((a, b) => b.value - a.value);
+  if (!items.length) return пусто(host, "пусто");
+  const всего = items.reduce((s, b) => s + b.value, 0) || 1, vMax = Math.max(...items.map(b => b.value)) || 1, eMax = Math.max(...items.map(b => b.ecpm)) || 1;
+  if (шапка) шапка.insertAdjacentHTML("beforeend", '<span class="badge">' + esc(items[0].name) + " — " + Math.round(items[0].value / всего * 100) + " %</span>");
+  const дешевле = items.filter(b => b.shows).sort((a, b) => a.ecpm - b.ecpm)[0], дороже = items.filter(b => b.shows).sort((a, b) => b.ecpm - a.ecpm)[0];
+  host.innerHTML = '<div class="ab"><div class="ab-h"><span>Блок</span><span>Доход</span><span>На 1000 показов</span></div>' +
+    items.map((b, i) => '<div class="ab-r"><div class="act-nm"><b>' + esc(b.name) + "</b><small>" + (b.shows ? fmt(b.shows) + " показов" : "показы неизвестны") + "</small></div>" +
+      '<div class="ab-bar"><i class="' + (i ? "t3" : "t1") + '" style="width:' + (b.value / vMax * 100) + '%"></i><b class="v">' + число(b.value, d.format || "money") + "</b></div>" +
+      '<div class="ab-e"><i style="width:' + (b.ecpm / eMax * 100) + '%"></i><b class="v">' + (b.shows ? число(b.ecpm, "money") : "—") + "</b></div></div>").join("") +
+    (дешевле && дороже && дороже !== дешевле ? '<p class="hint" style="padding:12px 0 0">Тысяча показов «' + esc(дешевле.name) + "» приносит " + число(дешевле.ecpm, "money") +
+      ", «" + esc(дороже.name) + "» — " + число(дороже.ecpm, "money") + ".</p>" : "") + "</div>";
+}
+
+/* Сумма за период с переключателем «сегодня, вчера, месяц, год», полоса
+   источников и гантели «прошлый месяц → этот» по каждому. Основной источник —
+   месяц; остальные блок просит полем with: today, yesterday, year, sources. */
+function блокPeriods(host, d, блок, шапка) {
+  const с = d.with || {}, моё = память((блок && блок.src) || "periods");
+  const периоды = [["today", "Сегодня"], ["yesterday", "Вчера"], ["month", "Месяц"], ["year", "Год"]].filter(([k]) => k === "month" || с[k]);
+  if (!моё.per || !периоды.some(([k]) => k === моё.per)) моё.per = "month";
+  const сводка = k => k === "month" ? d : с[k];
+  const src = ((с.sources || {}).rows || []).slice().sort((a, b) => (b[2] || 0) - (a[2] || 0));
+  const тона = ["t1", "t2", "t3", "t4", "t5"], тонИсточника = имя => тона[Math.max(0, src.findIndex(r => r[0] === имя)) % 5];
+  const теперь = new Date(), m = теперь.getMonth();
+  подписать(шапка, MONTH_FULL[m] + " " + теперь.getFullYear() + (src.length ? " · " + src.length + " " + plural(src.length, "источник", "источника", "источников") : ""));
+  if (шапка) шапка.insertAdjacentHTML("beforeend", '<div class="segc" role="group" aria-label="Период дохода">' +
+    периоды.map(([k, l]) => '<button data-per="' + k + '" aria-pressed="' + (моё.per === k) + '">' + l + "</button>").join("") + "</div>");
+  const сумма = () => {
+    const p = сводка(моё.per) || {}, части = (p.parts || []).filter(x => x.value > 0).sort((a, b) => b.value - a.value);
+    return '<div class="ib"><div class="ib-big"><b>' + число(p.value, p.format || "money") + "</b>" +
+      (p.delta !== undefined && p.delta !== null ? '<span class="badge">' + pctd(p.delta) + " к " + MONS[(m + 11) % 12] + "</span>" : "") +
+      (p.sub ? "<small>" + esc(p.sub) + "</small>" : "") + "</div>" +
+      (части.length ? '<div class="ib-bar">' + части.map(x => '<i class="' + тонИсточника(x.name) + '" style="flex:' + x.value + '" title="' + esc(x.name) + '"></i>').join("") + "</div>" +
+          '<div class="ib-leg">' + части.map(x => '<span><i class="' + тонИсточника(x.name) + '"></i>' + esc(x.name) + "<b>" + число(x.value, p.format || "money") + "</b></span>").join("") + "</div>"
+        : '<p class="ib-none">' + (моё.per === "year" ? "По источникам год не разложен: история хранит по месяцам только общий итог." : "Эту сумму сводка хранит одним числом, без разбивки по источникам.") + "</p>") + "</div>";
+  };
+  const dMax = Math.max(1, ...src.flatMap(r => [r[2] || 0, r[3] || 0]));
+  host.innerHTML = сумма() + (src.length ? '<div class="db"><div class="db-h"><span>Источник</span><span><i class="db-ring"></i>в ' + MONTH_IN[(m + 11) % 12] +
+      ' <i class="db-dot"></i>в ' + MONTH_IN[m] + "</span><span>Месяц</span></div>" +
+    src.map(r => {
+      const g = r[3] ? ((r[2] || 0) / r[3] - 1) * 100 : null, a = Math.min(r[2] || 0, r[3] || 0) / dMax * 100, b = Math.max(r[2] || 0, r[3] || 0) / dMax * 100;
+      return '<div class="db-r"><div class="act-nm"><b>' + esc(r[0]) + "</b><small>сегодня " + число(r[1] || 0, "money") + "</small></div>" +
+        '<div class="db-t"><i class="db-line' + ((r[2] || 0) < (r[3] || 0) ? " dn" : "") + '" style="left:' + a + "%;width:" + (b - a) + '%"></i><i class="db-ring" style="left:' + (r[3] || 0) / dMax * 100 + '%"></i><i class="db-dot ' + тонИсточника(r[0]) + '" style="left:' + (r[2] || 0) / dMax * 100 + '%"></i></div>' +
+        '<div class="db-v"><b class="v">' + число(r[2] || 0, "money") + '</b><small class="' + (g !== null && g < 0 ? "dn" : "") + '">' + (g === null ? "—" : pctd(g)) + "</small></div></div>";
+    }).join("") + "</div>" : "");
+  шапка && шапка.querySelectorAll("[data-per]").forEach(btn => btn.addEventListener("click", () => {
+    моё.per = btn.dataset.per;
+    шапка.querySelectorAll("[data-per]").forEach(x => x.setAttribute("aria-pressed", x === btn));
+    segThumbs();
+    const старое = host.querySelector(".ib-big > b").textContent;
+    host.querySelector(".ib").outerHTML = сумма();
+    const big = host.querySelector(".ib-big > b"), текст = big.textContent;
+    big.textContent = старое; tweenText(big, текст, 600);
+    host.querySelectorAll(".ib-bar i").forEach((e, i) => anim(e, GROW_X, { duration: 700, delay: i * 70 }));
+    host.querySelectorAll(".ib-leg > span, .ib-none").forEach((e, i) => anim(e, RISE, { duration: 420, delay: 80 + i * 40 }));
+  }));
+}
+
+/* Вафля: целое на пятьдесят клеток, доли — цветом. Для «сколько оплат и
+   откуда»: пятьдесят клеток считаются глазами, проценты — нет. */
+function блокWaffle(host, d, блок, шапка) {
+  const parts = (d.parts || []).filter(p => p.value > 0);
+  if (!parts.length) return блокStat(host, d, блок, шапка);
+  const всего = d.value || parts.reduce((s, p) => s + p.value, 0), клетки = share(parts.map(p => p.value), 50);
+  const тон = (p, i) => ОСТАТОК.test(String(p.name).trim()) ? "td" : ["t1", "t2", "t3", "t4", "t5"][Math.min(i, 4)];
+  if (d.sub) подписать(шапка, d.sub);
+  host.innerHTML = '<div class="pad"><div style="display:flex;align-items:baseline;gap:10px;margin-bottom:16px;flex-wrap:wrap"><b class="num" style="font:400 26px var(--mono)">' + число(всего, d.format) + "</b>" +
+      '<span class="num blue" style="font-size:13px">кусочек ≈ ' + dec(всего / 50) + "</span></div>" +
+    '<div class="waffle">' + клетки.flatMap((c, i) => Array(c).fill('<i class="' + тон(parts[i], i) + '"></i>')).join("") + "</div></div>" +
+    '<div class="hr" style="padding:8px 0 10px">' + parts.map((p, i) => '<div class="wl"><i class="' + тон(p, i) + '"></i>' + esc(p.name) +
+      '<span class="c">' + Math.round(p.value / всего * 100) + ' %</span><span class="num">' + число(p.value, d.format) + "</span></div>").join("") + "</div>";
 }
 
 /* ── funnel: шаги с отвалом ─────────────────────────────────────────────── */
@@ -202,7 +330,7 @@ function блокHeat(host, d) {
   if (!rows.length) return пусто(host, "когорт нет");
   const flip = parseFloat(getComputedStyle(document.documentElement)
     .getPropertyValue("--cell-flip")) || 57;
-  host.innerHTML = '<div style="overflow-x:auto"><table class="mx"><thead><tr><th></th>' +
+  host.innerHTML = '<div class="table-wrap"><table class="hm"><thead><tr><th></th>' +
     (d.colLabels || []).map(c => "<th>" + c + "</th>").join("") + "</tr></thead><tbody>" +
     rows.map((r, i) => '<tr><td class="k">' + (d.rowLabels[i] || "") + "</td>" +
       r.map((v, j) => {
@@ -212,15 +340,25 @@ function блокHeat(host, d) {
         const доля = j === 0 ? 100 : v / база * 100;
         const тон = Math.min(90, доля * 1.6);
         const текст = тон > flip ? "var(--cell-ink)" : "var(--ink)";
-        return '<td><span class="cell" style="background:color-mix(in oklab, var(--accent) ' +
-          тон.toFixed(0) + '%, var(--panel-2));color:' + текст + '">' + fmt(v) + "</span></td>";
+        return '<td><span class="cell" style="background:color-mix(in oklab, var(--b1) ' +
+          тон.toFixed(0) + '%, var(--sunk));color:' + текст + '">' + fmt(v) + "</span></td>";
       }).join("") + "</tr>").join("") + "</tbody></table></div>";
 }
 
 /* ── note: пояснение текстом ────────────────────────────────────────────── */
+/* Записка: каждая оговорка начинается с «Источник:», следующее предложение
+   без двоеточия дописывается к ней. Оговорки встают клетками. */
 function блокNote(host, d) {
-  host.innerHTML = '<p class="block-note" style="font-size:13px;color:var(--ink-2)">' +
-    (d.text || "") + "</p>";
+  const пункты = [];
+  String(d.text || "").split(/(?<=\.)\s+(?=[А-ЯЁA-Z])/).forEach(s => {
+    const m = s.match(/^([^:.]{2,40}):\s*(.*)$/);
+    if (m) пункты.push({ h: m[1], t: m[2] });
+    else if (/^Рубли|курс/i.test(s)) пункты.push({ h: "Курс", t: s });
+    else if (пункты.length) пункты.at(-1).t += " " + s;
+    else пункты.push({ h: "", t: s });
+  });
+  host.innerHTML = '<div class="nt' + (пункты.length < 2 ? " one" : "") + '">' + пункты.map(x =>
+    '<div class="nt-i">' + (x.h ? "<b>" + esc(x.h) + "</b>" : "") + "<p>" + esc(x.t) + "</p></div>").join("") + "</div>";
 }
 
 /* ── map: карта двух величин ────────────────────────────────────────────── */
@@ -472,8 +610,8 @@ function блокShelf(host, d, блок) {
     // Дату съёмки в скачанный файл ставит сервер, и нужна она не всегда:
     // иногда кадр нужен галерее свежим, по дате загрузки к себе. Выбор
     // запоминается — переключают его редко, а качают помногу.
-    '<label class="shelf-date"><input type="checkbox"' +
-      (моё.origDate === false ? "" : " checked") + '>дата съёмки</label>' +
+    '<label class="shelf-date">дата съёмки<input type="checkbox"' +
+      (моё.origDate === false ? "" : " checked") + '><span class="sw" aria-hidden="true"></span></label>' +
     // Пару ставит поиск, поэтому лента обязана сказать, что показывает не всё:
     // без плашки «пусто» на редкой паре читается как поломка ленты.
     (пара ? '<div class="shelf-pair">файлы пары <b>' + текстом(пара) +
@@ -518,11 +656,13 @@ function блокShelf(host, d, блок) {
     '<button class="ghost-btn" data-pack>Скачать оригиналы</button>' +
     '<button class="ghost-btn" data-pick-off>Снять выбор</button></div>';
 
-  host.innerHTML = фильтры +
+  host.innerHTML = '<div class="shelf-bar">' + фильтры + "</div>" +
+    '<div class="shelf-body">' +
     (items.length ? '<div class="shelf">' + кадры + "</div>" : '<p class="block-empty">пусто</p>') +
-    маячок + листалка + полоса +
-    '<p class="block-note">Порядок — по загрузке в хранилище, а не по дате внутри записи: ' +
+    маячок + "</div>" + листалка + полоса +
+    '<p class="block-note shelf-note">Порядок — по загрузке в хранилище, а не по дате внутри записи: ' +
     "дату загрузивший может подвинуть. Кадры чужие, поэтому наружу они не уходят.</p>";
+  segThumbs();
 
   const перерисовать = async () => {
     // Держим блок на месте: перерисовка меняет высоту, и страница уезжала
@@ -591,7 +731,11 @@ function блокShelf(host, d, блок) {
   const обновитьПолосу = () => {
     if (сетка) сетка.classList.toggle("выбираем", моё.выбор.length > 0);
     if (!полосаВыбора) return;
+    const была = !полосаВыбора.hidden;
     полосаВыбора.hidden = моё.выбор.length === 0;
+    // полоса выезжает снизу, а не возникает
+    if (!была && !полосаВыбора.hidden)
+      anim(полосаВыбора, [{ opacity: 0, transform: "translate(-50%,24px)" }, { opacity: 1, transform: "translate(-50%,0)" }], { duration: 380 });
     полосаВыбора.querySelector("b").textContent = кадровСловом(моё.выбор.length);
     // Полоса всплыла или ушла — кнопка «наверх» встаёт над ней или опускается.
     if (typeof поставитьНаверх === "function") поставитьНаверх();
@@ -1228,6 +1372,16 @@ function открытьКадр(items, i, сДатой) {
   };
   показать(i);
   document.body.appendChild(слой);
+  // Кадр вырастает из своей плитки, фон проявляется, полоса подписи выезжает снизу.
+  anim(слой, FADE, { duration: 260 });
+  const плитка = items[i] && document.querySelector('.shelf figure[data-id="' + CSS.escape(String(items[i].id)) + '"] .ph');
+  const крупно = слой.querySelector("img, video, .light-snd");
+  if (плитка && крупно) {
+    const a = плитка.getBoundingClientRect(), b = крупно.getBoundingClientRect();
+    if (b.width && b.height) anim(крупно, [{ transformOrigin: "0 0", opacity: .5, transform: "translate(" + (a.left - b.left) + "px," + (a.top - b.top) + "px) scale(" + (a.width / b.width) + "," + (a.height / b.height) + ")" },
+      { transformOrigin: "0 0", opacity: 1, transform: "none" }], { duration: 480 });
+  }
+  anim(слой.querySelector(".light-bar"), [{ opacity: 0, transform: "translate(-50%,12px)" }, { opacity: 1, transform: "translate(-50%,0)" }], { duration: 400, delay: 120 });
 
   const клавиша = e => {
     if (e.key === "Escape") закрыть();
@@ -1235,8 +1389,9 @@ function открытьКадр(items, i, сДатой) {
     if (e.key === "ArrowLeft") показать(Number(слой.dataset.i) - 1);
   };
   const закрыть = () => {
-    слой.remove();
     removeEventListener("keydown", клавиша);
+    const уход = anim(слой, [{ opacity: 1 }, { opacity: 0 }], { duration: 180, fill: "forwards" });
+    (уход ? уход.finished : Promise.resolve()).then(() => слой.remove());
   };
   addEventListener("keydown", клавиша);
   слой.addEventListener("click", закрыть);
@@ -1303,14 +1458,15 @@ function блокSearch(host, d, блок) {
 
   let ответ;
   if (!было) {
-    ответ = '<p class="block-empty">введите запрос</p>';
+    ответ = '<p class="search-hint">Найденное встанет таблицей. Щелчок по выделенной ячейке откроет соседний блок на этом значении — так ленту сужают до файлов одной пары.</p>';
   } else if (!разделы.length) {
-    ответ = '<p class="block-empty">ничего не нашлось</p>';
+    ответ = '<p class="search-hint">По запросу «' + текстом(было) + '» ничего не нашлось.</p>';
   } else {
-    ответ = разделы.map(таблица).join("");
+    ответ = разделы.map(таблица).join("") + '<div style="height:8px"></div>';
   }
 
   host.innerHTML = строка + ответ;
+  if (было && разделы.length) host.querySelectorAll(".tbl tbody tr").forEach((tr, i) => anim(tr, RISE, { duration: 420, delay: Math.min(i * 30, 300) }));
 
   // Щелчок по помеченной ячейке уводит соседний блок к этому значению.
   host.querySelectorAll(".cell-link").forEach(b => b.addEventListener("click", () => {
@@ -1324,7 +1480,8 @@ function блокSearch(host, d, блок) {
     моё.q = q;
     моё.ответ = null;
     if (!q) return блокSearch(host, null, блок);
-    host.innerHTML = '<p class="block-empty">Ищу…</p>';
+    const кнопка = форма.querySelector("button");
+    if (кнопка) { кнопка.disabled = true; кнопка.textContent = "Ищу…"; }
     const ссылка = адрес("/api/query") + "?src=" + encodeURIComponent(src) +
       "&q=" + encodeURIComponent(q);
     try {
@@ -1342,16 +1499,21 @@ const ЗАГОТОВКИ = {
   stat: блокStat, columns: блокColumns, raster: блокRaster, table: блокTable,
   list: блокList, funnel: блокFunnel, heat: блокHeat, note: блокNote, map: блокMap,
   shelf: блокShelf, search: блокSearch,
+  periods: блокPeriods, waffle: блокWaffle, rows: блокRows, rate: блокRate,
 };
 
-function нарисовать(host, тип, данные, блок) {
+/* шапка — правый угол заголовка карточки: туда заготовка кладёт переключатель
+   или плашку. Живой блок перерисовывается заново, поэтому старое из угла
+   снимается, кроме крестика правки раскладки. */
+function нарисовать(host, тип, данные, блок, шапка) {
   // Заготовки, рисующие в svg, дописывают узлы к тому, что уже лежит внутри,
   // поэтому заглушку «загружаю» надо снять руками.
   host.innerHTML = "";
+  if (шапка) шапка.querySelectorAll(":scope > :not(.block-x)").forEach(e => e.remove());
   const рисовать = ЗАГОТОВКИ[тип];
   if (!рисовать) return пусто(host, "панель не умеет блок «" + тип + "»: обновите её");
   try {
-    рисовать(host, данные, блок);
+    рисовать(host, данные, блок, шапка);
   } catch (e) {
     пусто(host, "данные не разобрались: " + e.message);
   }

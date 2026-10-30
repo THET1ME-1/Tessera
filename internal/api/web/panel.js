@@ -2,12 +2,13 @@
  *
  * Ни одного знания о том, что такое «событие», «доход» или «пара», здесь нет.
  * Панель знает три вещи: какие есть вкладки, из каких блоков состоит вкладка и
- * где взять данные блока. Всё остальное решает сервер и модули. */
+ * где взять данные блока. Всё остальное решает сервер и модули. Оформление —
+ * макет v2: боковое меню, карточки, движение из motion.js. */
 
 const модули = {};   // id модуля → его имя, для подписи блоков
 
 /* Набор данных для вкладок ядра. Приходит одним запросом и живёт до смены
-   периода: экраны макета читают его так же, как читали вшитый в файл. */
+   периода или приложения. */
 let DATA = {};
 
 /* Вкладки ядра нарисованы в макете, вкладки модулей — из заготовок. */
@@ -19,10 +20,14 @@ const ЯДРО = {
   versions: () => viewVersions(),
   apps: () => viewApps(),
 };
+const ЗНАЧКИ_ЯДРА = { overview: 'overview', screens: 'screens', people: 'people', funnels: 'funnels', versions: 'versions', apps: 'apps' };
+const ТОНА_МОДУЛЕЙ = ['t4', 't3', 't1', 't2', 't5'];
 
 function подписьПериода() {
   const t = DATA.totals || {};
-  return t.first && t.last ? t.first + " – " + t.last : "";
+  if (!(t.first && t.last)) return '';
+  const с = t.first.startsWith('0000') ? ((DATA.history || [])[0] || {}).d : t.first;
+  return с ? day(с) + ' – ' + day(t.last) : '';
 }
 
 const state = {
@@ -111,6 +116,7 @@ $("gateForm").addEventListener("submit", async e => {
     await запустить();
   } catch {
     $("gateNote").textContent = "Пароль не подошёл.";
+    anim($("gateForm"), [{ transform: "translateX(0)" }, { transform: "translateX(-6px)" }, { transform: "translateX(5px)" }, { transform: "translateX(0)" }], { duration: 320, easing: EASE_IO });
   }
 });
 
@@ -119,24 +125,88 @@ $("signout").addEventListener("click", async () => {
   location.reload();
 });
 
-/* ── вкладки и раскладка ────────────────────────────────────────────────── */
+/* ── боковое меню ───────────────────────────────────────────────────────── */
 
 async function загрузитьВкладки() {
   // Приложение обязано ехать в запросе: вкладки у них разные, и без него
   // сервер отвечает про первое.
   state.вкладки = await взять(адрес("/api/tabs") +
     (state.app ? "?app=" + encodeURIComponent(state.app) : ""));
-  $("tabs").innerHTML = state.вкладки.map(t =>
-    '<button role="tab" data-tab="' + t.id + '" aria-selected="' + (t.id === state.tab) + '">' +
-    (t.mod ? '<span class="frag" title="вкладку принёс модуль"></span>' : "") +
-    t.title + "</button>").join("");
-  document.querySelectorAll("[data-tab]").forEach(b =>
-    b.addEventListener("click", () => {
-      state.tab = b.dataset.tab;
-      location.hash = state.tab;
-      нарисоватьВкладку();
-    }));
+  нарисоватьМеню();
 }
+
+function нарисоватьМеню() {
+  const ядро = state.вкладки.filter(t => !t.mod), мод = state.вкладки.filter(t => t.mod);
+  const счёт = { screens: (DATA.screens || []).length, apps: (DATA.apps || []).length };
+  const ссылка = (t, i) => '<a href="#' + t.id + '" data-tab="' + t.id + '"' +
+    (t.id === state.tab ? ' aria-current="page"' : "") + ">" +
+    (t.mod ? '<i class="sq ' + ТОНА_МОДУЛЕЙ[i % ТОНА_МОДУЛЕЙ.length] + '"></i>' : svg(ЗНАЧКИ_ЯДРА[t.id] || "grid")) +
+    "<span>" + esc(t.title) + "</span>" +
+    (!t.mod && счёт[t.id] ? '<span class="cnt">' + счёт[t.id] + "</span>" : "") + "</a>";
+  $("nav-core").innerHTML = ядро.map(ссылка).join("");
+  $("nav-mods").innerHTML = мод.map(ссылка).join("");
+  $("sect-mods").hidden = !мод.length;
+}
+
+/* Подсветка открытой вкладки меняется на месте: фон пункта перетекает. */
+function отметитьВкладку() {
+  document.querySelectorAll(".nav a").forEach(a =>
+    a.dataset.tab === state.tab ? a.setAttribute("aria-current", "page") : a.removeAttribute("aria-current"));
+}
+
+document.addEventListener("click", e => {
+  const a = e.target.closest(".nav a[data-tab]");
+  if (!a) return;
+  e.preventDefault();
+  if (a.dataset.tab === state.tab) return;
+  location.hash = a.dataset.tab;
+});
+
+/* Выбор приложения — меню под его именем. С одним приложением меню нет. */
+function заполнитьВыборПриложений() {
+  const apps = DATA.apps || [];
+  const своё = apps.find(a => a.id === state.app);
+  $("org-name").textContent = своё ? своё.name : "Tessera";
+  $("org").querySelector(".chev").style.display = apps.length > 1 ? "" : "none";
+  $("org-menu").innerHTML = apps.map(a => '<button type="button" role="menuitem" data-app="' + esc(a.id) + '"' +
+    (a.id === state.app ? ' aria-current="true"' : "") + (a.live ? "" : " disabled") + "><span>" + esc(a.name) + "</span>" +
+    "<small>" + (a.live ? n(a.dau || 0) + " сегодня" : "нет событий") + "</small></button>").join("");
+}
+$("org").addEventListener("click", () => {
+  const меню = $("org-menu");
+  if ((DATA.apps || []).length < 2) return;
+  const открыть = меню.hidden;
+  меню.hidden = !открыть;
+  $("org").setAttribute("aria-expanded", String(открыть));
+  if (открыть) anim(меню, [{ opacity: 0, transform: "translateY(-4px) scale(.98)" }, { opacity: 1, transform: "none" }], { duration: 260 });
+});
+document.addEventListener("pointerdown", e => {
+  if (!e.target.closest("#org, #org-menu")) { $("org-menu").hidden = true; $("org").setAttribute("aria-expanded", "false"); }
+});
+$("org-menu").addEventListener("click", async e => {
+  const b = e.target.closest("[data-app]");
+  if (!b || b.disabled) return;
+  $("org-menu").hidden = true;
+  if (b.dataset.app === state.app) return;
+  state.app = b.dataset.app;
+  try { localStorage.setItem("tessera-app", state.app); } catch {}
+  ядроКогда = 0;
+  онлайнЧисло = null;
+  // Вкладки у приложений РАЗНЫЕ: модуль модерации разбирает фото
+  // Togetherly, и в панели Wallet его вкладки нет. Без перезапроса там
+  // оставались чужие вкладки, а открытая чужая отвечала пустотой.
+  await загрузитьЯдро();
+  await загрузитьВкладки();
+  if (!state.вкладки.some(t => t.id === state.tab)) {
+    state.tab = "overview";
+    history.replaceState(null, "", "#overview");
+  }
+  await загрузитьИмена();
+  заполнитьВыборПриложений();
+  сменитьВид();
+});
+
+/* ── вкладки ────────────────────────────────────────────────────────────── */
 
 // Номер последней отрисовки. Пока вызов ждёт сервер, человек успевает нажать
 // другую вкладку или период, и тогда вид принадлежит новому вызову. Без этой
@@ -145,165 +215,200 @@ async function загрузитьВкладки() {
 // запоздавшая раскладка модуля затирала уже открытую вкладку.
 let отрисовка = 0;
 
-async function нарисоватьВкладку() {
+/* how: 'enter' — новая вкладка собирается карточками, 'soft' — та же вкладка с
+   новыми данными (числа перетекают), 'boot' — первая загрузка с каркасом,
+   'quiet' — без движения (ширина окна, правка раскладки). */
+async function нарисоватьВкладку(how = "enter") {
   const мой = ++отрисовка;
   const устарел = () => мой !== отрисовка;
   const вкладка = state.tab;
-
-  document.querySelectorAll("[data-tab]").forEach(b =>
-    b.setAttribute("aria-selected", String(b.dataset.tab === вкладка)));
-
+  отметитьВкладку();
   const view = $("view");
-  view.innerHTML = '<p class="block-empty">Загружаю…</p>';
+  const было = how === "soft" ? snapshot(view) : null;
 
   // Вкладки ядра нарисованы в макете и получают весь набор данных разом.
   if (ЯДРО[вкладка]) {
     try {
       await загрузитьЯдро();
       if (устарел()) return;
-      // Экраны ядра слушают период всегда. Без этого кнопки, погашенные
-      // вкладкой модуля, оставались мёртвыми и на обзоре до перезагрузки.
-      периодУместен([{ src: "core:" + вкладка }]);
       снятьЖивые();
       ЯДРО[вкладка]();
-      подписатьШапку();
-      оживитьПлитки();
+      segThumbs();
+      нарисоватьМеню();
+      показатьДвижение(how, было);
+      живойОнлайн();
     } catch (e) {
       if (устарел()) return;
-      view.innerHTML = '<p class="block-empty">Вкладка не открылась: ' + e.message + "</p>";
+      view.innerHTML = '<p class="block-empty">Вкладка не открылась: ' + esc(e.message) + "</p>";
     }
     return;
   }
 
   let раскладка;
   try {
-    раскладка = await взять(адрес("/api/layout?tab=") + encodeURIComponent(вкладка));
+    раскладка = await взять(адрес("/api/layout?tab=") + encodeURIComponent(вкладка) +
+      (state.app ? "&app=" + encodeURIComponent(state.app) : ""));
   } catch (e) {
     if (устарел()) return;
-    view.innerHTML = '<p class="block-empty">Вкладка не открылась: ' + e.message + "</p>";
+    view.innerHTML = '<p class="block-empty">Вкладка не открылась: ' + esc(e.message) + "</p>";
     return;
   }
   if (устарел()) return;
 
   const блоки = раскладка.blocks || [];
   state.блоки = блоки;
-  периодУместен(блоки);
+  const чьи = src => { const id = String(src || "").split(":")[0]; return id === "core" ? "" : (модули[id] || id); };
 
-  view.innerHTML = панельНастройки() +
-    (блоки.length
-      ? '<div class="grid" id="сетка">' + блоки.map((b, i) =>
+  view.innerHTML = (блоки.length
+      ? '<div class="grid g12" id="сетка">' + блоки.map((b, i) =>
           // Класс типа нужен раскладке телефона: там ширина решается не
           // числом колонок, а тем, ЧТО внутри. Одно число живёт в половине
           // строки, а график или растр в половине превращаются в кашу.
-          '<section class="panel c' + (b.span || 12) + ' b-' + (b.type || "stat") +
-            '" data-idx="' + i + '"' +
-            (state.настройка ? ' draggable="true"' : "") + ">" +
-            '<div class="panel-head"><span class="lbl">' + b.title + "</span>" +
+          '<section class="card c' + (b.span || 12) + " b-" + (b.type || "stat") + (state.настройка ? "" : " ждёт") +
+            '" data-idx="' + i + '"' + (state.настройка ? ' draggable="true"' : "") + ">" +
+            '<header class="ch"><span class="it">' + svg(b.icon || ЗНАЧОК_ЗАГОТОВКИ[b.type] || "grid") + "</span>" +
+            "<div><h2>" + esc(b.title) + "</h2>" +
             // Владельца подписываем, только когда он не ядро: «core» у каждого
             // второго блока — шум, а имя модуля объясняет, откуда числа.
-            (b.src.startsWith("core:") ? "" :
-              '<span class="lbl">' + (модули[b.src.split(":")[0]] || b.src.split(":")[0]) + "</span>") +
-            (state.настройка
-              ? '<button class="block-x" data-remove="' + i + '" title="Убрать блок">×</button>'
-              : "") +
-            "</div>" +
-            '<div id="блок-' + i + '">' +
+            ((b.sub || чьи(b.src)) ? "<p>" + esc(b.sub || чьи(b.src)) + "</p>" : "") + "</div>" +
+            '<div class="cr" id="шапка-' + i + '">' +
+            (state.настройка ? '<button class="block-x" data-remove="' + i + '" title="Убрать блок">×</button>' : "") +
+            "</div></header>" +
+            '<div class="in" id="блок-' + i + '">' +
               (state.настройка
                 // В настройке числа не грузим: важна раскладка. Но пустое тело
                 // читается как поломка, поэтому блок называет себя сам.
-                ? '<p class="block-empty">' + b.type + " · " + b.src + "</p>"
-                : '<p class="block-empty">…</p>') +
-            "</div>" +
-          "</section>").join("") + "</div>"
-      : '<p class="block-empty">На этой вкладке пока нет блоков. Нажмите «Настроить» и добавьте.</p>');
+                ? '<p class="block-empty">' + esc(b.type) + " · " + esc(b.src) + "</p>"
+                : "") +
+            "</div></section>").join("") + "</div>"
+      : '<p class="block-empty">На этой вкладке пока нет блоков. Нажмите «Настроить вкладку» и добавьте.</p>') +
+    панельНастройки() + подвал();
 
+  segThumbs();
   if (state.настройка) {
     подключитьПеретаскивание();
     return; // в настройке числа не грузим: важна раскладка, а не данные
   }
+  // Карточки встают каркасом, данные проступают в каждой, как только придут.
+  const вошли = how === "quiet" || how === "soft" ? [] : enterView(view, true);
 
   // Запросы идут разом: один медленный источник не держит остальные.
   снятьЖивые();
-  живойОнлайн();
   блоки.forEach((b, i) => {
-    const host = $("блок-" + i);
+    const host = $("блок-" + i), шапка = $("шапка-" + i), карточка = host.closest(".card");
+    const готово = () => {
+      if (устарел()) return;
+      const первый = карточка.classList.contains("ждёт");
+      карточка.classList.remove("ждёт");
+      segThumbs();
+      if (!первый) return;
+      if (how === "quiet") return;
+      if (было) anim(host, [{ opacity: .35, filter: "blur(4px)" }, { opacity: 1, filter: "blur(0)" }], { duration: 500 });
+      else if (!карточка.classList.contains("wait")) revealInside(карточка, вошли.includes(карточка) ? 120 : 0);
+    };
     // Поиск заранее ничего не считает: ответы зависят от запроса, и собирать
     // их расписанием бессмысленно. Рисуем поле ввода сразу, а за данными блок
     // сходит сам, когда человек нажмёт «Найти».
-    if (b.type === "search") return нарисовать(host, b.type, null, b);
+    if (b.type === "search") { нарисовать(host, b.type, null, b, шапка); return готово(); }
     const живой = секунды(b.live);
-    const тянуть = () => взять(ссылкаБлока(b, живой))
-      .then(d => нарисовать(host, b.type, d, b))
+    const тянуть = () => данныеБлока(b, живой)
+      .then(d => { if (устарел()) return; нарисовать(host, b.type, d, b, шапка); готово(); })
       .catch(e => {
+        if (устарел()) return;
         // У живого блока обрыв — это мигание раз в двадцать секунд, поэтому
         // прежнее число остаётся на месте: лучше слегка устаревшее, чем дыра.
         if (живой && host.querySelector(".stat-val")) return;
         host.innerHTML = '<p class="block-empty">' +
           (e.message.includes("не отвечал") ? "Модуль ещё не присылал данные."
-                                            : "Источник не ответил: " + e.message) + "</p>";
+                                            : "Источник не ответил: " + esc(e.message)) + "</p>";
+        готово();
       });
     тянуть();
     if (живой) живые.push(setInterval(() => { if (!document.hidden) тянуть(); }, живой * 1000));
   });
 }
+const ЗНАЧОК_ЗАГОТОВКИ = { stat: "grid", columns: "chart", raster: "grid", table: "list", list: "list", funnel: "funnels",
+  heat: "calendar", note: "note", map: "chart", shelf: "screens", search: "search", periods: "coin", waffle: "grid",
+  rows: "bag", rate: "ad" };
 
-// «На связи» стоит в верхней строке рядом с людьми и событиями — там его
-// видно сразу и с любой вкладки. Плитка на обзоре показывает то же число с
-// разбивкой по системам, но до неё на телефоне надо листать, а первый вопрос
-// при открытии панели обычно именно этот: живо ли всё вообще.
-let онлайнЗаведён = false;
-function живойОнлайн() {
-  const ячейка = $("ctx-online");
-  if (!ячейка || онлайнЗаведён) return;
-  // Живые соединения считает модуль Togetherly. В панели Wallet это чужое
-  // число — там своих соединений нет вовсе (18.09.2026).
-  if (!DATA.moderation) {
-    ячейка.textContent = "—";
-    return;
-  }
-  онлайнЗаведён = true;
-  const тянуть = () => взять(адрес("/api/query") + "?src=moderation:online")
-    .then(d => { ячейка.textContent = (d.value || 0).toLocaleString("ru"); })
-    // Молчание источника не стирает последнее известное число: мигающая раз в
-    // двадцать секунд цифра хуже слегка устаревшей.
-    .catch(() => { if (ячейка.textContent === "—") ячейка.textContent = "—"; });
-  тянуть();
-  setInterval(() => { if (!document.hidden) тянуть(); }, 20000);
+/* Данные блока. Блок может попросить ещё несколько источников полем `with`
+   ({имя: "модуль:ключ"}): «Доход» рисует сумму, источники и прошлый месяц
+   одной карточкой, а модуль отдаёт их отдельными ключами. */
+async function данныеБлока(b, живой) {
+  const d = await взять(ссылкаБлока(b, живой));
+  if (!b.with) return d;
+  const ещё = await Promise.all(Object.entries(b.with).map(([имя, src]) =>
+    взять(ссылкаБлока({ src, ranged: b.ranged }, false)).then(v => [имя, v]).catch(() => [имя, null])));
+  return { ...d, with: Object.fromEntries(ещё) };
 }
 
-// Плитки, которые спрашивают число сами. Наполняет их та же машинерия, что и
-// живые блоки: запрос идёт мимо собранного расписанием, а перерисовывается
-// только сама плитка.
-function оживитьПлитки() {
+/* Как вкладка появляется: каркас при первой загрузке, карточками при смене
+   вкладки, перетеканием чисел при новых данных той же вкладки. */
+function показатьДвижение(how, было) {
+  const view = $("view");
+  if (how === "soft") return settle(view, было);
+  if (how === "quiet" || CALM.matches) return;
+  if (how === "boot") {
+    view.classList.add("loading");
+    const вошли = enterView(view, true);
+    setTimeout(() => { view.classList.remove("loading"); вошли.forEach((c, i) => revealInside(c, i * 90)); }, 900);
+    return;
+  }
+  enterView(view);
+}
+
+/* Та же вкладка ядра с новыми данными или в другом поясе: блоки, которые
+   изменились, проступают, числа доезжают от старых значений. */
+function перерисоватьЯдро(how = "soft") {
+  if (!ЯДРО[state.tab]) return нарисоватьВкладку(how);
+  const view = $("view"), было = how === "soft" ? snapshot(view) : null;
+  ЯДРО[state.tab]();
+  segThumbs();
+  if (было) settle(view, было);
   живойОнлайн();
-  document.querySelectorAll("[data-live-src]").forEach(плитка => {
-    const src = плитка.dataset.liveSrc;
-    const тянуть = () => взять(адрес("/api/query") + "?src=" + encodeURIComponent(src))
-      .then(d => {
-        const число = плитка.querySelector(".tile-v");
-        const низ = плитка.querySelector(".tile-sub");
-        if (!число) return;
-        число.textContent = (d.value || 0).toLocaleString("ru");
-        const части = (d.parts || []).slice(0, 2)
-          .map(ч => ч.name + " " + (ч.value || 0).toLocaleString("ru")).join(" · ");
-        низ.textContent = части || d.sub || "";
-      })
-      .catch(() => {
-        // Молчание источника не должно стирать последнее известное число:
-        // мигающая раз в двадцать секунд плитка хуже слегка устаревшей.
-        const низ = плитка.querySelector(".tile-sub");
-        if (низ && низ.textContent === "спрашиваю приложение") низ.textContent = "модуль молчит";
-      });
-    тянуть();
-    живые.push(setInterval(() => { if (!document.hidden) тянуть(); }, 20000));
-  });
+}
+
+/* Смена вкладки: старая уходит вверх и тает, новая собирается карточками. */
+function сменитьВид() {
+  const view = $("view");
+  const дальше = () => { scrollTo(0, 0); нарисоватьВкладку("enter"); };
+  document.querySelector(".lb, .light")?.remove();
+  if (CALM.matches || !view.animate || !view.children.length) return дальше();
+  const уход = view.animate([{ opacity: 1, transform: "none", filter: "blur(0)" }, { opacity: 0, transform: "translateY(-8px)", filter: "blur(3px)" }],
+    { duration: 220, easing: "cubic-bezier(.5,0,.75,0)", fill: "forwards" });
+  уход.finished.then(() => { дальше(); уход.cancel(); });
+}
+
+// «Сейчас в приложении» на обзоре — живое число модуля Togetherly. Ходит само
+// раз в двадцать секунд и меняет только свою ячейку: перерисуй мы вкладку
+// целиком, человек терял бы прокрутку каждые двадцать секунд.
+let онлайнТаймер = 0;
+function живойОнлайн() {
+  if (!DATA.moderation) return;
+  const тянуть = () => взять(адрес("/api/query") + "?src=moderation:online")
+    .then(d => {
+      const было = онлайнЧисло;
+      онлайнЧисло = d;
+      const ячейка = $("online-cell");
+      if (!ячейка) return;
+      const старое = ячейка.querySelector(".v").textContent;
+      ячейка.outerHTML = онлайнЯчейка();
+      const новая = $("online-cell");
+      if (было) { const v = новая.querySelector(".v"), текст = v.textContent; v.textContent = старое; tweenText(v, текст, 600); }
+    })
+    // Молчание источника не стирает последнее известное число: мигающая раз в
+    // двадцать секунд цифра хуже слегка устаревшей.
+    .catch(() => {});
+  if (!онлайнТаймер) {
+    онлайнТаймер = setInterval(() => { if (!document.hidden && $("online-cell")) тянуть(); }, 20000);
+  }
+  if ($("online-cell")) тянуть();
 }
 
 // ── живые блоки ──────────────────────────────────────────────────────────────
 // Онлайн стареет за минуту, поэтому такой блок ходит за числом сам. Ходит он
 // мимо собранного расписанием — через тот же путь, которым лента берёт свои
-// страницы, — и перерисовывает ТОЛЬКО себя: перерисуй мы вкладку целиком,
-// человек терял бы прокрутку и открытую ленту каждые двадцать секунд.
+// страницы, — и перерисовывает ТОЛЬКО себя.
 const живые = [];
 function снятьЖивые() { while (живые.length) clearInterval(живые.pop()); }
 function секунды(строка) {
@@ -318,16 +423,18 @@ function ссылкаБлока(b, живой) {
     (state.app ? "&app=" + encodeURIComponent(state.app) : "");
 }
 
+/* ── настройка раскладки ────────────────────────────────────────────────── */
+
 function панельНастройки() {
   if (!state.настройка) {
     return '<div class="edit-bar"><button class="ghost-btn" id="начатьНастройку">' +
-      "Настроить вкладку</button></div>";
+      svg("pencil") + "Настроить вкладку</button></div>";
   }
   return '<div class="edit-bar edit-on">' +
-    "<span class=\"lbl\">Блок берётся за заголовок и переставляется мышью</span>" +
+    '<span class="lbl">Блок берётся за себя и переставляется мышью</span>' +
     '<button class="ghost-btn" id="добавитьБлок">Добавить блок</button>' +
     '<button class="ghost-btn" id="сброситьРаскладку">Вернуть заводскую</button>' +
-    '<button class="btn" id="закончитьНастройку">Готово</button></div>';
+    '<button class="btn dark" id="закончитьНастройку">Готово</button></div>';
 }
 
 /* Перетаскивание: блок берётся за себя целиком, порядок меняется на месте и
@@ -337,7 +444,7 @@ function подключитьПеретаскивание() {
   if (!сетка) return;
   let взятый = null;
 
-  сетка.querySelectorAll(".panel").forEach(node => {
+  сетка.querySelectorAll(".card").forEach(node => {
     node.addEventListener("dragstart", e => {
       взятый = node;
       node.classList.add("dragging");
@@ -346,7 +453,7 @@ function подключитьПеретаскивание() {
     node.addEventListener("dragend", async () => {
       node.classList.remove("dragging");
       взятый = null;
-      const порядок = [...сетка.querySelectorAll(".panel")].map(n => Number(n.dataset.idx));
+      const порядок = [...сетка.querySelectorAll(".card")].map(n => Number(n.dataset.idx));
       state.блоки = порядок.map(i => state.блоки[i]);
       await сохранитьРаскладку();
     });
@@ -362,7 +469,7 @@ function подключитьПеретаскивание() {
 
 async function сохранитьРаскладку() {
   await послать(адрес("/api/layout"), { tab: state.tab, blocks: state.блоки });
-  нарисоватьВкладку();
+  нарисоватьВкладку("quiet");
 }
 
 /* Что можно добавить: блоки ядра и то, что предлагают модули. */
@@ -375,10 +482,11 @@ async function показатьКаталог() {
     '<button class="block-x" id="закрытьЛист" title="Закрыть">×</button></div>' +
     каталог.map((c, i) =>
       '<button class="cat-row" data-cat="' + i + '">' +
-      "<span>" + c.block.title + "</span>" +
-      '<span class="lbl">' + c.owner + " · " + c.block.type + "</span></button>").join("") +
+      "<span>" + esc(c.block.title) + "</span>" +
+      '<span class="lbl">' + esc(c.owner) + " · " + esc(c.block.type) + "</span></button>").join("") +
     "</div>";
   document.body.appendChild(лист);
+  anim(лист.firstChild, [{ opacity: 0, transform: "translateY(16px)" }, { opacity: 1, transform: "none" }], { duration: 320 });
 
   лист.addEventListener("click", async e => {
     if (e.target === лист || e.target.closest("#закрытьЛист")) { лист.remove(); return; }
@@ -393,18 +501,17 @@ async function показатьКаталог() {
 document.addEventListener("click", async e => {
   if (e.target.closest("#начатьНастройку")) {
     state.настройка = true;
-    нарисоватьВкладку();
+    нарисоватьВкладку("quiet");
   } else if (e.target.closest("#закончитьНастройку")) {
     state.настройка = false;
-    нарисоватьВкладку();
+    нарисоватьВкладку("enter");
   } else if (e.target.closest("#добавитьБлок")) {
     показатьКаталог();
   } else if (e.target.closest("#сброситьРаскладку")) {
     // Пустая раскладка означает «отдавай заводскую»: сервер сам подставит её.
     await послать(адрес("/api/layout"), { tab: state.tab, blocks: [] });
-    await fetch(адрес("/api/layout") + "?tab=" + encodeURIComponent(state.tab), { credentials: "same-origin" });
     state.настройка = false;
-    нарисоватьВкладку();
+    нарисоватьВкладку("enter");
   } else if (e.target.closest("[data-remove]")) {
     const i = Number(e.target.closest("[data-remove]").dataset.remove);
     state.блоки = state.блоки.filter((_, j) => j !== i);
@@ -429,12 +536,9 @@ async function загрузитьЯдро() {
   if (свежо) return;
   DATA = await взять(адрес("/api/core") + "?range=" + encodeURIComponent(state.range) +
     (state.app ? "&app=" + encodeURIComponent(state.app) : ""));
-  // Макет ждёт от модулей плоские числа (DATA.income.month), а модуль
-  // присылает блоки ({value, sub}). Разворачиваем: панель не должна знать,
-  // что внутри блока, но обзор рисовался до модулей и правок не требует.
   // Чужой модуль не приезжает вовсе — сервер отдаёт данные только своим
   // приложениям. Пустой объект вместо `undefined` здесь означал бы «модуль
-  // есть, но молчит», и обзор Wallet рисовал бы плитку дохода с прочерком.
+  // есть, но молчит», и обзор Wallet спрашивал бы онлайн Togetherly.
   const м = DATA.modules || {};
   DATA.income = м.income ? развернуть(м.income) : null;
   DATA.moderation = м.moderation ? развернуть(м.moderation) : null;
@@ -444,56 +548,16 @@ async function загрузитьЯдро() {
     try { прежнее = localStorage.getItem("tessera-app") || ""; } catch {}
     const есть = DATA.apps.some(a => a.id === прежнее);
     state.app = есть ? прежнее : DATA.apps[0].id;
-    заполнитьВыборПриложений();
+    // Ядро отдавало первое приложение; если выбрано другое — спрашиваем его.
+    if (есть && прежнее !== DATA.apps[0].id) { ядроКогда = 0; return загрузитьЯдро(); }
   }
+  заполнитьВыборПриложений();
   ядроКогда = Date.now();
-}
-
-function заполнитьВыборПриложений() {
-  const sel = $("appselect");
-  if (!sel || !(DATA.apps || []).length) return;
-  sel.innerHTML = DATA.apps.map(a =>
-    '<option value="' + a.id + '"' + (a.id === state.app ? " selected" : "") +
-    (a.live ? "" : " disabled") + ">" + a.name + (a.live ? "" : " · нет событий") +
-    "</option>").join("");
-  sel.onchange = async () => {
-    state.app = sel.value;
-    try { localStorage.setItem("tessera-app", state.app); } catch {}
-    ядроКогда = 0;
-    онлайнЗаведён = false;
-    const ячейкаОнлайн = $("ctx-online");
-    if (ячейкаОнлайн) ячейкаОнлайн.textContent = "—";
-    // Вкладки у приложений РАЗНЫЕ: модуль модерации разбирает фото
-    // Togetherly, и в панели Wallet его вкладки нет. Без перезапроса там
-    // оставались чужие вкладки, а открытая чужая отвечала пустотой.
-    await загрузитьВкладки();
-    if (!state.вкладки.some(t => t.id === state.tab)) {
-      state.tab = "overview";
-      location.hash = state.tab;
-    }
-    await загрузитьИмена();
-    нарисоватьВкладку();
-  };
 }
 
 async function загрузитьМодули() {
   const список = await взять(адрес("/api/modules")).catch(() => []);
   список.forEach(m => { модули[m.id] = m.name; });
-}
-
-/* Строка контекста: сколько событий в базе и за какой срок они живут. */
-/* Строка контекста: за какой срок собрано, сколько людей и событий, какой SDK
-   прислал последнее событие. */
-function подписатьШапку() {
-  const t = DATA.totals || {};
-  const поставить = (id, знач) => { const n = $(id); if (n) n.textContent = знач; };
-
-  поставить("ctx-people", t.people === undefined ? "—" : fmt(t.people));
-  поставить("ctx-events", t.events === undefined ? "—" : fmt(t.events));
-  if (t.first) поставить("ctx-range", подписьПериода());
-
-  const своё = (DATA.apps || []).find(a => a.id === state.app) || (DATA.apps || [])[0];
-  поставить("ctx-sdk", (своё && своё.sdk) || "—");
 }
 
 /* ── словарь имён ───────────────────────────────────────────────────────── */
@@ -529,7 +593,7 @@ document.addEventListener("click", e => {
       await послать(адрес("/api/labels"), { app: state.app, key: ключ, title: имя === ключ ? "" : имя });
       await загрузитьИмена();
     }
-    нарисоватьВкладку();
+    перерисоватьЯдро();
   };
   поле.addEventListener("keydown", ev => {
     if (ev.key === "Enter") готово(true);
@@ -538,43 +602,19 @@ document.addEventListener("click", e => {
   поле.addEventListener("blur", () => готово(true));
 });
 
-/* ── период, приложения, тема ───────────────────────────────────────────── */
-
-document.querySelectorAll("[data-range]").forEach(b =>
-  b.addEventListener("click", () => {
-    state.range = b.dataset.range;
-    ядроКогда = 0;
-    document.querySelectorAll("[data-range]").forEach(x => x.removeAttribute("aria-pressed"));
-    b.setAttribute("aria-pressed", "true");
-    подписатьПериод();
-    нарисоватьВкладку();
-  }));
-
-// Период гаснет там, где ни один блок его не слушает. Блоки ядра слушают
-// всегда; блок модуля — когда объявлен `ranged`, и тогда ядро спрашивает
-// модуль заново, передавая границы. До 15.08.2026 такого договора не было
-// вовсе: доход собирался расписанием без периода, кнопки жались, а число
-// оставалось месячным — со стороны это читалось как неверная сумма.
-function периодУместен(блоки) {
-  const ядром = блоки.some(b => (b.src || "").startsWith("core:") || b.ranged);
-  const ряд = $("ranges");
-  if (!ряд) return;
-  ряд.classList.toggle("не-влияет", !ядром);
-  ряд.title = ядром ? "" : "На этой вкладке период не влияет: модуль отдаёт свои периоды";
-  ряд.querySelectorAll("button").forEach(b => { b.disabled = !ядром; });
-}
+/* ── обновление и свежесть ──────────────────────────────────────────────── */
 
 // Пересбор по кнопке. Сводки считает расписание, и это правильно, но между
 // прогонами лежит двадцать минут: свежая покупка в панели ещё не видна, а со
 // стороны это читается как неверный расчёт. Собираем модуль открытой вкладки,
 // а на вкладках ядра — все: там числа приходят из своей базы, и пересбор
-// нужен ради модульных плиток на обзоре.
+// нужен ради онлайна и модульных чисел.
 const кнопкаОбновить = $("refresh");
-if (кнопкаОбновить) кнопкаОбновить.addEventListener("click", async () => {
+кнопкаОбновить.addEventListener("click", async () => {
   if (кнопкаОбновить.disabled) return;
   кнопкаОбновить.disabled = true;
   кнопкаОбновить.classList.add("крутится");
-  const чей = (state.блоки || []).map(b => (b.src || "").split(":")[0])
+  const чей = ЯДРО[state.tab] ? "" : (state.блоки || []).map(b => (b.src || "").split(":")[0])
     .find(в => в && в !== "core") || "";
   try {
     const r = await fetch(адрес("/api/refresh") + (чей ? "?module=" + encodeURIComponent(чей) : ""),
@@ -582,7 +622,7 @@ if (кнопкаОбновить) кнопкаОбновить.addEventListener(
     const о = await r.json().catch(() => ({}));
     if (о && о.ok === false) сказать("Собралось не всё: " + (о.error || "источник не ответил"));
     ядроКогда = 0;
-    await нарисоватьВкладку();
+    await нарисоватьВкладку("soft");
     await свежесть();
   } catch (e) {
     сказать("Не обновилось: " + e.message);
@@ -596,17 +636,15 @@ if (кнопкаОбновить) кнопкаОбновить.addEventListener(
 // «числа не сошлись» от «числа получасовой давности».
 async function свежесть() {
   const ячейка = $("ctx-fresh");
-  if (!ячейка) return;
   try {
     const ms = await взять(адрес("/api/modules"));
     const t = Math.max(0, ...ms.map(m => m.updated || 0));
     if (!t) { ячейка.textContent = "модули молчат"; return; }
     const мин = Math.round((Date.now() / 1000 - t) / 60);
-    ячейка.textContent = мин < 1 ? "только что"
+    ячейка.textContent = "собрано " + (мин < 1 ? "только что"
       : мин < 60 ? мин + " мин назад"
-      : new Date(t * 1000).toLocaleString("ru", { hour: "2-digit", minute: "2-digit",
-                                                  day: "2-digit", month: "2-digit" });
-  } catch { ячейка.textContent = "—"; }
+      : new Date(t * 1000).toLocaleString("ru", { hour: "2-digit", minute: "2-digit", day: "numeric", month: "short" }));
+  } catch { ячейка.textContent = "свой сервер"; }
 }
 
 function сказать(текст) {
@@ -614,67 +652,56 @@ function сказать(текст) {
   п.className = "тост";
   п.textContent = текст;
   document.body.appendChild(п);
-  setTimeout(() => п.remove(), 5000);
+  anim(п, [{ opacity: 0, transform: "translate(-50%,12px)" }, { opacity: 1, transform: "translate(-50%,0)" }], { duration: 320 });
+  setTimeout(() => {
+    const a = anim(п, [{ opacity: 1 }, { opacity: 0 }], { duration: 240, fill: "forwards" });
+    (a ? a.finished : Promise.resolve()).then(() => п.remove());
+  }, 5000);
 }
 
-function подписатьПериод() {
-  const подписи = { "7d": "последние 7 суток", "15d": "последние 15 суток",
-                    "30d": "последние 30 суток", all: "всё время" };
-  $("ctx-range").textContent = подписи[state.range] || state.range;
-}
+/* ── тема ───────────────────────────────────────────────────────────────── */
 
-const rs = $("rawSwitch");
-const переключитьКлючи = () => {
-  state.rawNames = !state.rawNames;
-  rs.setAttribute("aria-checked", String(state.rawNames));
-  нарисоватьВкладку();
-};
-rs.addEventListener("click", переключитьКлючи);
-rs.addEventListener("keydown", e => {
-  if (e.key === " " || e.key === "Enter") { e.preventDefault(); переключитьКлючи(); }
-});
-
-function поставитьТему(t) {
+function поставитьТему(t, плавно) {
   state.theme = t;
+  if (плавно) themeFlow();
   if (t === "auto") document.documentElement.removeAttribute("data-theme");
   else document.documentElement.setAttribute("data-theme", t);
   document.querySelectorAll("[data-theme-set]").forEach(x =>
     x.setAttribute("aria-pressed", String(x.dataset.themeSet === t)));
+  segThumbs();
   try { localStorage.setItem("tessera-theme", t); } catch {}
 }
 document.querySelectorAll("[data-theme-set]").forEach(b =>
-  b.addEventListener("click", () => поставитьТему(b.dataset.themeSet)));
+  b.addEventListener("click", () => поставитьТему(b.dataset.themeSet, true)));
 
 /* ── запуск ─────────────────────────────────────────────────────────────── */
 
 async function запустить() {
   if (!await проверитьВход()) return;
 
-  document.documentElement.setAttribute("data-dir", "b"); // растровое оформление
   try { поставитьТему(localStorage.getItem("tessera-theme") || "auto"); } catch {}
-  подписатьПериод();
-
-  await загрузитьВкладки();
-  const изАдреса = location.hash.replace("#", "");
-  if (state.вкладки.some(t => t.id === изАдреса)) state.tab = изАдреса;
 
   await загрузитьМодули();
   await загрузитьЯдро();       // отсюда узнаём приложение
-  // Вкладки спрашивались ДО того, как приложение стало известно, и приезжали
-  // от первого. У приложений они разные, поэтому спрашиваем ещё раз — теперь
-  // зная, чью панель показываем.
   await загрузитьВкладки();
-  if (!state.вкладки.some(t => t.id === state.tab)) state.tab = "overview";
+  const изАдреса = location.hash.replace("#", "");
+  if (state.вкладки.some(t => t.id === изАдреса)) state.tab = изАдреса;
+  else if (!state.вкладки.some(t => t.id === state.tab)) state.tab = "overview";
   await загрузитьИмена();
-  await нарисоватьВкладку();
+  // Боковое меню выезжает по пунктам, вкладка встаёт каркасом.
+  if (!CALM.matches) document.querySelectorAll(".org, .sect:not([hidden]), .nav a, .side-foot > *").forEach((e, i) =>
+    anim(e, [{ opacity: 0, transform: "translateX(-10px)" }, { opacity: 1, transform: "none" }], { duration: 600, delay: 80 + i * 35 }));
+  await нарисоватьВкладку("boot");
   свежесть();
+  setInterval(() => { if (!document.hidden) свежесть(); }, 60000);
 }
 
 addEventListener("hashchange", () => {
   const t = location.hash.replace("#", "");
   if (t && t !== state.tab && state.вкладки.some(x => x.id === t)) {
     state.tab = t;
-    нарисоватьВкладку();
+    отметитьВкладку();
+    сменитьВид();
   }
 });
 
@@ -689,32 +716,30 @@ addEventListener("hashchange", () => {
 let таймерРазмера = null;
 let последняяШирина = innerWidth;
 addEventListener("resize", () => {
+  segThumbs();
   if (Math.abs(innerWidth - последняяШирина) < 40) return;
   последняяШирина = innerWidth;
   clearTimeout(таймерРазмера);
-  таймерРазмера = setTimeout(нарисоватьВкладку, 200);
+  таймерРазмера = setTimeout(() => ЯДРО[state.tab] ? перерисоватьЯдро("quiet") : нарисоватьВкладку("quiet"), 200);
 });
 
 /* Кнопка «наверх» в правом нижнем углу. Видна, когда страница ушла вниз
  * дальше экрана: на телефоне до шапки модерации — три экрана ленты.
  *
- * Полоса выбора кадров липнет к низу экрана и правым краем закрыла бы кнопку,
- * поэтому, пока полоса прилипла, кнопка поднимается над ней. */
+ * Полоса выбора кадров висит у низа экрана и правым краем закрыла бы кнопку,
+ * поэтому, пока полоса видна, кнопка поднимается над ней. */
 function поставитьНаверх() {
   const кнопка = $("наверх");
   if (!кнопка) return;
   кнопка.classList.toggle("видна", scrollY > innerHeight * 0.8);
   const полоса = document.querySelector(".shelf-pick:not([hidden])");
-  // Прилипшая полоса стоит у самого низа экрана. Когда лента ещё ниже экрана,
-  // полоса тоже там, и уступать ей место незачем.
   const место = полоса && полоса.getBoundingClientRect();
   const прилипла = место && место.top < innerHeight && место.bottom > innerHeight - 24;
   кнопка.style.setProperty("--над", прилипла ? полоса.offsetHeight + 8 + "px" : "0px");
 }
 addEventListener("scroll", поставитьНаверх, { passive: true });
 $("наверх").addEventListener("click", () => {
-  const плавно = !matchMedia("(prefers-reduced-motion: reduce)").matches;
-  scrollTo({ top: 0, behavior: плавно ? "smooth" : "auto" });
+  scrollTo({ top: 0, behavior: CALM.matches ? "auto" : "smooth" });
 });
 
 запустить();
