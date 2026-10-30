@@ -34,6 +34,7 @@ const мир = {
   console,
   document: {
     getElementById: () => null,
+    querySelector: () => null,
     createElement: () => { const у = узел(); созданные.push(у); return у; },
     body: узел(),
   },
@@ -44,6 +45,8 @@ const мир = {
   fmt: n => String(n), NBSP: " ", взять: async () => ({}), сказать: () => {},
   URLSearchParams, addEventListener: () => {}, removeEventListener: () => {},
   Image: class { set src(v) { this._s = v; } get src() { return this._s; } },
+  // движение живёт в motion.js, здесь оно ни к чему
+  anim: () => null, segThumbs: () => {}, FADE: [], RISE: [], GROW_X: [], CSS: { escape: s => s },
 };
 vm.createContext(мир);
 vm.runInContext(readFileSync(new URL("./blocks.js", import.meta.url), "utf8"), мир);

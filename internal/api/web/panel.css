@@ -691,6 +691,7 @@ a{color:inherit}
 .shelf-pair button{padding:2px 9px;line-height:1.2;font-size:13px}
 .shelf-body{padding:16px 18px}
 .shelf{--cols-auto:8;--cols:var(--cols-auto);display:grid;grid-template-columns:repeat(var(--cols),minmax(0,1fr));gap:10px}
+@media (min-width:1360px){ .shelf{--cols-auto:10} }
 .shelf figure{margin:0;display:flex;flex-direction:column;gap:6px;min-width:0;cursor:zoom-in;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
 .shelf.выбираем figure{cursor:pointer}
 .shelf .ph{position:relative;aspect-ratio:4/5;border-radius:9px;overflow:hidden;border:1px solid var(--line);background:var(--sunk) repeating-linear-gradient(135deg,transparent 0 9px,var(--cell) 9px 10px);transition:box-shadow .25s var(--ease),transform .3s var(--ease)}
