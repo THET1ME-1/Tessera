@@ -67,6 +67,13 @@ func (a *API) всеДанные(w http.ResponseWriter, r *http.Request) {
 	собрать("totals", func() (any, error) { return a.итоги(app, from, to) })
 	собрать("days", func() (any, error) { return a.дни(app, from, to) })
 	собрать("hours", func() (any, error) { return a.часы(app) })
+	// Обзор и «Люди» показывают всю историю независимо от периода: окно по ней
+	// двигает сама панель.
+	собрать("history", func() (any, error) {
+		всеС, всеПо := диапазон("all")
+		return a.дни(app, всеС, всеПо)
+	})
+	собрать("hourly", func() (any, error) { return a.часыПоДням(app) })
 	собрать("screens", func() (any, error) { return a.экраны(app, from, to) })
 	собрать("actions", func() (any, error) { return a.действия(app, from, to) })
 	собрать("versions", func() (any, error) { return a.версии(app, from, to) })
@@ -193,6 +200,45 @@ func (a *API) часы(app string) (any, error) {
 		out = append(out, map[string]any{"h": час, "e": событий, "u": людей})
 	}
 	return out, rows.Err()
+}
+
+// часыПоДням — люди в каждый час каждых суток, как лежит в сводке: по UTC.
+// В местное время, с переходом на зимнее, их переводит панель по поясу
+// смотрящего. Час без строки — null: его ещё не было или событий не пришло.
+func (a *API) часыПоДням(app string) (any, error) {
+	rows, err := a.s.Чтение().Query(`
+		SELECT day, hour, sum(people) FROM hourly
+		WHERE app=? GROUP BY day, hour ORDER BY day, hour`, app)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	начало := ""
+	var строки [][]*float64
+	var первый time.Time
+	for rows.Next() {
+		var день string
+		var час int
+		var людей float64
+		if err := rows.Scan(&день, &час, &людей); err != nil {
+			return nil, err
+		}
+		дата, err := time.Parse(time.DateOnly, день)
+		if err != nil || час < 0 || час > 23 {
+			continue
+		}
+		if начало == "" {
+			начало, первый = день, дата
+		}
+		номер := int(дата.Sub(первый).Hours() / 24)
+		for len(строки) <= номер {
+			строки = append(строки, make([]*float64, 24))
+		}
+		v := людей
+		строки[номер][час] = &v
+	}
+	return map[string]any{"start": начало, "rows": строки}, rows.Err()
 }
 
 func (a *API) экраны(app, from, to string) (any, error) {

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
@@ -58,4 +59,36 @@ func планЗапроса(t *testing.T, a *API, sql string, аргументы
 		строки = append(строки, detail)
 	}
 	return strings.Join(строки, "\n")
+}
+
+// Обзор и «Люди» рисуют всю историю, а не выбранный период: ползунок окна
+// ходит по ней сам, волны прихода сравниваются за месяцы. Сетка суток ещё и
+// перекладывается в пояс смотрящего, поэтому часы приходят по дням как есть,
+// в UTC, а не сложенными в одни сутки.
+func TestЯдроОтдаётИсториюИЧасы(t *testing.T) {
+	a, кука := стенд(t)
+	rec := запрос(t, a, "GET", "/api/core?range=7d", кука, "")
+	if rec.Code != 200 {
+		t.Fatalf("код %d: %s", rec.Code, rec.Body.String())
+	}
+	var д struct {
+		History []map[string]any `json:"history"`
+		Hourly  struct {
+			Start string       `json:"start"`
+			Rows  [][]*float64 `json:"rows"`
+		} `json:"hourly"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &д); err != nil {
+		t.Fatal(err)
+	}
+	// Событие стенда — 14 августа, за пределами семи суток: история его видит.
+	if len(д.History) != 1 || д.History[0]["d"] != "2026-08-14" {
+		t.Fatalf("история: %v", д.History)
+	}
+	if д.Hourly.Start != "2026-08-14" || len(д.Hourly.Rows) != 1 || len(д.Hourly.Rows[0]) != 24 {
+		t.Fatalf("часы: %+v", д.Hourly)
+	}
+	if д.Hourly.Rows[0][12] == nil || д.Hourly.Rows[0][3] != nil {
+		t.Fatalf("12 часов посчитаны, 3 часа пусты: %v", д.Hourly.Rows[0])
+	}
 }
