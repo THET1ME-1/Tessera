@@ -406,7 +406,9 @@ function attention() {
     box.querySelectorAll('.tile').forEach(t => t.classList.toggle('on', +t.dataset.i === i));
     const it = items.find(x => x.i === i), s = it.s, доля = it.v / sum * 100;
     const rows = s ? [['Часы внимания', n(s.h) + ' ч'], ['Открытий', n(s.hits)], ['Людей·дней', n(s.u)], ['В среднем за раз', s.sec >= 60 ? `${Math.floor(s.sec / 60)} мин` + (Math.round(s.sec % 60) ? ` ${Math.round(s.sec % 60)} с` : '') : Math.round(s.sec) + ' с']]
-      : [['Часы внимания', n(it.rest.reduce((a, x) => a + x.h, 0)) + ' ч'], ['Открытий', n(it.rest.reduce((a, x) => a + x.hits, 0))], ['Экраны', esc(it.rest.map(title).join(', '))]];
+      // у остатка те же четыре строки, что у экрана: список из трёх десятков имён
+      // раздувал колонку, телефон рядом съезжал по центру и уводил плитку из-под курсора
+      : [['Часы внимания', n(it.rest.reduce((a, x) => a + x.h, 0)) + ' ч'], ['Открытий', n(it.rest.reduce((a, x) => a + x.hits, 0))], ['Людей·дней', n(it.rest.reduce((a, x) => a + x.u, 0))], ['Экранов', n(it.rest.length)]];
     // прежние числа и длина полосы: от них новые значения доедут, а не встанут скачком
     const was = [...side.querySelectorAll('.ph-big b, .ph-r b')].map(e => e.textContent), barWas = side.querySelector('.ph-bar i')?.style.width;
     side.innerHTML = `<div class="ph-h"><span class="ph-sw ${tone(i)}"></span><div><b>${esc(s ? title(s) : 'Остальные экраны')}</b><small>${s ? esc(s.n) : rest.length + ' шт.'}</small></div></div>
