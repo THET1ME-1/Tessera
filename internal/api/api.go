@@ -23,6 +23,7 @@ type API struct {
 	modulesDir string
 	secret     []byte
 	core       map[string]blocks.Source
+	iconsDir   string
 }
 
 func New(s *store.Store, modulesDir string, secret []byte) *API {
@@ -46,6 +47,7 @@ func (a *API) Routes() *http.ServeMux {
 	mux.Handle("/api/file", Middleware(a.secret, http.HandlerFunc(a.file)))
 	mux.Handle("/api/query", Middleware(a.secret, http.HandlerFunc(a.query)))
 	mux.Handle("/api/refresh", Middleware(a.secret, http.HandlerFunc(a.refresh)))
+	mux.Handle("/api/icon", Middleware(a.secret, http.HandlerFunc(a.icon)))
 	// Вкладки ядра нарисованы в макете до последней подписи, поэтому получают
 	// весь набор данных разом, а не по блоку за запрос.
 	mux.Handle("/api/core", Middleware(a.secret, http.HandlerFunc(a.всеДанные)))

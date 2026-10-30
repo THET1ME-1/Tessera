@@ -163,14 +163,37 @@ document.addEventListener("click", e => {
 });
 
 /* Выбор приложения — меню под его именем. С одним приложением меню нет. */
+// Значок приложения ложится поверх квадратиков Tessera: пока он едет или
+// если у установки его нет, остаётся заводской знак.
+function значокПриложения(id) {
+  return '<span class="logo" data-app="' + esc(id) + '"><i></i><i></i><i></i><i></i>' +
+    '<img alt="" src="' + адрес("/api/icon") + "?app=" + encodeURIComponent(id) + '"></span>';
+}
+function оживитьЗначки(где) {
+  где.querySelectorAll(".logo img").forEach(img => {
+    const показать = () => img.parentNode.classList.add("есть-значок");
+    if (img.complete && img.naturalWidth) показать();
+    img.addEventListener("load", показать, { once: true });
+    img.addEventListener("error", () => img.remove(), { once: true });
+  });
+}
 function заполнитьВыборПриложений() {
   const apps = DATA.apps || [];
   const своё = apps.find(a => a.id === state.app);
   $("org-name").textContent = своё ? своё.name : "Tessera";
+  // Знак меняем, только когда сменилось приложение: иначе он мигал бы на
+  // каждом обновлении ядра.
+  const знак = $("org").querySelector(".logo");
+  if (своё && знак.dataset.app !== своё.id) {
+    знак.outerHTML = значокПриложения(своё.id);
+    оживитьЗначки($("org"));
+  }
   $("org").querySelector(".chev").style.display = apps.length > 1 ? "" : "none";
   $("org-menu").innerHTML = apps.map(a => '<button type="button" role="menuitem" data-app="' + esc(a.id) + '"' +
-    (a.id === state.app ? ' aria-current="true"' : "") + (a.live ? "" : " disabled") + "><span>" + esc(a.name) + "</span>" +
-    "<small>" + (a.live ? n(a.dau || 0) + " сегодня" : "нет событий") + "</small></button>").join("");
+    (a.id === state.app ? ' aria-current="true"' : "") + (a.live ? "" : " disabled") + ">" +
+    значокПриложения(a.id) + '<span class="имя">' + esc(a.name) +
+    "<small>" + (a.live ? n(a.dau || 0) + " сегодня" : "нет событий") + "</small></span></button>").join("");
+  оживитьЗначки($("org-menu"));
 }
 $("org").addEventListener("click", () => {
   const меню = $("org-menu");
