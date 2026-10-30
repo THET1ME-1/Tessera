@@ -782,6 +782,11 @@ a{color:inherit}
 .bcols i,.hist i{transform-origin:50% 100%}
 .two i,.plat i,.track .bar{transform-origin:0 50%}
 .card.wait{opacity:0}
+/* карточка ждёт чисел за новое окно: приглушена, по ней бежит блик */
+.card .in{position:relative}
+.card.пересчёт .in>*{opacity:.4;transition:opacity .25s var(--ease)}
+.card.пересчёт .in{cursor:progress;overflow:hidden}
+.card.пересчёт .in::after{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(100deg,transparent 30%,color-mix(in oklab,var(--panel) 70%,transparent) 50%,transparent 70%);background-size:250% 100%;animation:sweep 1.2s var(--ease-io) infinite}
 /* первая загрузка: каркас карточек, по нему бежит блик */
 #view.loading .ch h2,#view.loading .ch p{color:transparent;background:var(--cell);border-radius:6px}
 #view.loading .ch .cr,#view.loading .ch .it svg,#view.loading .foot-note{visibility:hidden}

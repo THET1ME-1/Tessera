@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -41,7 +42,16 @@ func (a *API) всеДанные(w http.ResponseWriter, r *http.Request) {
 	}
 	from, to := диапазон(r.URL.Query().Get("range"))
 
-	ключ := app + "|" + from + "|" + to
+	// only — какие срезы нужны («platforms,screens»). Окно обзора спрашивает
+	// только зависящее от дней: история, часы, когорты и приложения от окна
+	// не зависят, а считаются дольше всего.
+	нужно := map[string]bool{}
+	for _, имя := range strings.Split(r.URL.Query().Get("only"), ",") {
+		if имя = strings.TrimSpace(имя); имя != "" {
+			нужно[имя] = true
+		}
+	}
+	ключ := app + "|" + from + "|" + to + "|" + r.URL.Query().Get("only")
 	кэшМу.Lock()
 	если, есть := кэш[ключ]
 	кэшМу.Unlock()
@@ -54,6 +64,9 @@ func (a *API) всеДанные(w http.ResponseWriter, r *http.Request) {
 	д := map[string]any{}
 	var ошибки []string
 	собрать := func(имя string, дело func() (any, error)) {
+		if len(нужно) > 0 && !нужно[имя] {
+			return
+		}
 		v, err := дело()
 		if err != nil {
 			// Один упавший срез не должен уносить всю вкладку: панель покажет

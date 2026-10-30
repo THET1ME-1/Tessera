@@ -17,7 +17,9 @@ const периодСловами = () => {
 /* Окно под сеткой «Люди по дням» — период всего обзора: сутки, сборки,
    платформы, экраны и действия считаются за те же дни. Ядро спрашивается
    заново, когда окно отпустили, а не на каждый сдвиг ручки. */
-let окноТаймер = 0;
+let окноТаймер = 0, окноЗапрос = 0;
+/* срезы ядра, которые зависят от дней окна; история, часы и когорты — нет */
+const ЗАВИСИТ_ОТ_ОКНА = 'totals,days,screens,actions,versions,platforms,ads,funnels';
 function синхронизироватьОкно() {
   const H = ИСТОРИЯ();
   if (state.tab !== 'overview' || !H.length || winFrom < 0) return;
@@ -25,11 +27,23 @@ function синхронизироватьОкно() {
   clearTimeout(окноТаймер);
   if (state.range === нужно) return;
   окноТаймер = setTimeout(async () => {
-    state.range = нужно;
-    ядроКогда = 0;
-    await загрузитьЯдро();
-    if (state.tab === 'overview' && state.range === нужно) перерисоватьЯдро();
-  }, 400);
+    const мой = ++окноЗапрос;
+    // карточки, которые ждут новых чисел, сразу приглушаются: без этого
+    // казалось, что окно ничего не меняет
+    const ждут = [...document.querySelectorAll('#view .card')].slice(1);
+    ждут.forEach(c => c.classList.add('пересчёт'));
+    try {
+      const часть = await взять(адрес('/api/core') + '?range=' + encodeURIComponent(нужно) +
+        (state.app ? '&app=' + encodeURIComponent(state.app) : '') + '&only=' + ЗАВИСИТ_ОТ_ОКНА);
+      if (мой !== окноЗапрос || state.tab !== 'overview') return;
+      Object.assign(DATA, часть);
+      state.range = нужно;
+      ядроКогда = Date.now();
+      перерисоватьЯдро();
+    } catch (e) {
+      if (мой === окноЗапрос) ждут.forEach(c => c.classList.remove('пересчёт'));
+    }
+  }, 300);
 }
 const виду = html => { document.getElementById('view').innerHTML = html + подвал(); };
 const подвал = () => {
