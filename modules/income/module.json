@@ -13,76 +13,73 @@
       "title": "Доход",
       "blocks": [
         {
-          "type": "stat",
-          "title": "Доход за период",
-          "span": 6,
-          "src": "income:month",
-          "ranged": true
-        },
-        {
-          "type": "stat",
-          "title": "Сегодня",
-          "span": 3,
-          "src": "income:today"
-        },
-        {
-          "type": "stat",
-          "title": "Вчера",
-          "span": 3,
-          "src": "income:yesterday"
-        },
-        {
-          "type": "table",
-          "title": "Источники",
+          "type": "periods",
+          "title": "Доход",
+          "icon": "coin",
           "span": 7,
-          "src": "income:sources"
+          "src": "income:month",
+          "with": {
+            "today": "income:today",
+            "yesterday": "income:yesterday",
+            "year": "income:year",
+            "sources": "income:sources"
+          }
         },
         {
-          "type": "stat",
+          "type": "waffle",
           "title": "Продано доступа",
+          "icon": "grid",
           "span": 5,
           "src": "income:sold"
         },
         {
-          "type": "table",
-          "title": "Покупки по магазинам",
+          "type": "columns",
+          "title": "По месяцам",
+          "icon": "chart",
           "span": 12,
+          "src": "income:history",
+          "with": {
+            "now": "income:month",
+            "year": "income:year"
+          }
+        },
+        {
+          "type": "rows",
+          "title": "Покупки",
+          "sub": "что купили и где",
+          "icon": "bag",
+          "span": 5,
           "src": "income:purchases"
         },
         {
-          "type": "columns",
-          "title": "По месяцам",
-          "span": 12,
-          "src": "income:history"
+          "type": "rate",
+          "title": "Реклама по блокам",
+          "sub": "доход и выручка на тысячу показов",
+          "icon": "ad",
+          "span": 7,
+          "src": "income:blocks"
         },
         {
           "type": "raster",
           "title": "География рекламы",
+          "icon": "chart",
           "span": 7,
           "src": "income:geo"
         },
         {
           "type": "list",
           "title": "Реклама по системам",
+          "sub": "где показывали рекламу",
+          "icon": "apps",
           "span": 5,
           "src": "income:os"
         },
         {
-          "type": "list",
-          "title": "Реклама по блокам",
-          "span": 12,
-          "src": "income:blocks"
-        },
-        {
-          "type": "stat",
-          "title": "За год",
-          "span": 4,
-          "src": "income:year"
-        },
-        {
           "type": "note",
           "title": "Оговорки источников",
-          "span": 8,
+          "sub": "почему числа расходятся с кабинетами на несколько процентов",
+          "icon": "filter",
+          "span": 12,
           "src": "income:notes"
         }
       ]

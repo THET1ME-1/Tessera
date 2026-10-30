@@ -16,31 +16,24 @@
         {
           "type": "search",
           "title": "Найти",
+          "sub": "пару или человека, чтобы открыть ленту только его файлов",
+          "icon": "search",
           "span": 12,
           "src": "moderation:find",
           "placeholder": "почта, имя, id пары или человека"
         },
         {
-          "type": "stat",
-          "title": "Файлов в хранилище",
-          "span": 4,
-          "src": "moderation:total"
-        },
-        {
-          "type": "stat",
-          "title": "Воспоминаний",
-          "span": 4,
-          "src": "moderation:fresh"
-        },
-        {
           "type": "raster",
           "title": "Что лежит",
-          "span": 4,
+          "icon": "image",
+          "span": 12,
           "src": "moderation:kinds"
         },
         {
           "type": "shelf",
           "title": "Лента",
+          "sub": "по загрузке в хранилище, свежие сверху",
+          "icon": "screens",
           "span": 12,
           "src": "moderation:shelf"
         }
