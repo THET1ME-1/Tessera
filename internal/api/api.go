@@ -68,6 +68,16 @@ func (a *API) layout(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "нужны tab и blocks", http.StatusBadRequest)
 			return
 		}
+		// Пустая раскладка — это «вернуть заводскую»: своя стирается, и
+		// сервер снова отдаёт ту, что объявили ядро и модули.
+		if len(в.Blocks) == 0 {
+			if _, err := a.s.DB().Exec(`DELETE FROM layout WHERE tab=?`, в.Tab); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			отдать(w, map[string]any{"ok": true})
+			return
+		}
 		raw, err := json.Marshal(в.Blocks)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)

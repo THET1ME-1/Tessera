@@ -130,6 +130,29 @@ func TestРаскладкаСохраняется(t *testing.T) {
 	}
 }
 
+// «Вернуть заводскую» шлёт пустую раскладку. Раньше она ложилась в базу как
+// есть, и вкладка оставалась без единого блока: «На этой вкладке пока нет
+// блоков». Пустая раскладка стирает свою, и сервер снова отдаёт заводскую.
+func TestПустаяРаскладкаВозвращаетЗаводскую(t *testing.T) {
+	a, кука := стенд(t)
+	запрос(t, a, "POST", "/api/layout", кука, `{"tab":"overview","blocks":[{"type":"stat","title":"Своё","span":4,"src":"core:events_total"}]}`)
+	if rec := запрос(t, a, "POST", "/api/layout", кука, `{"tab":"overview","blocks":[]}`); rec.Code != 200 {
+		t.Fatalf("код %d: %s", rec.Code, rec.Body.String())
+	}
+	var ответ struct {
+		Blocks []map[string]any `json:"blocks"`
+	}
+	json.Unmarshal(запрос(t, a, "GET", "/api/layout?tab=overview", кука, "").Body.Bytes(), &ответ)
+	if len(ответ.Blocks) == 0 {
+		t.Fatal("после сброса вкладка пустая, а должна быть заводской")
+	}
+	for _, b := range ответ.Blocks {
+		if b["title"] == "Своё" {
+			t.Fatal("сброс оставил свою раскладку")
+		}
+	}
+}
+
 func TestВкладкиМодуляВстаютРядомСЯдром(t *testing.T) {
 	s, err := store.Open(filepath.Join(t.TempDir(), "t.db"))
 	if err != nil {
