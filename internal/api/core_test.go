@@ -92,3 +92,34 @@ func TestЯдроОтдаётИсториюИЧасы(t *testing.T) {
 		t.Fatalf("12 часов посчитаны, 3 часа пусты: %v", д.Hourly.Rows[0])
 	}
 }
+
+// «Платформы» на обзоре считают людей за окно, и за две недели число
+// сдвигается медленно — на глаз оно стоит. Рядом с окном нужен сегодняшний
+// день: это число живое и отвечает на вопрос «кто сейчас на Android».
+func TestПлатформыНесутСегодня(t *testing.T) {
+	a, кука := стенд(t)
+	сегодня := time.Now().UTC().Format("2006-01-02")
+	вчера := time.Now().UTC().AddDate(0, 0, -1).Format("2006-01-02")
+	for _, с := range [][3]string{{сегодня, "а", "android"}, {вчера, "б", "android"}, {вчера, "в", "ios"}} {
+		if _, err := a.s.DB().Exec(`INSERT INTO seen (app, day, who, platform) VALUES ('togetherly',?,?,?)`, с[0], с[1], с[2]); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var д struct {
+		Platforms []struct {
+			P string  `json:"p"`
+			U float64 `json:"u"`
+			D float64 `json:"d"`
+		} `json:"platforms"`
+	}
+	// Окно своё: ответ ядра кэшируется на полминуты по приложению и окну, и
+	// семь суток уже спрашивал соседний тест.
+	json.Unmarshal(запрос(t, a, "GET", "/api/core?range=6d", кука, "").Body.Bytes(), &д)
+	итог := map[string][2]float64{}
+	for _, п := range д.Platforms {
+		итог[п.P] = [2]float64{п.U, п.D}
+	}
+	if итог["android"] != [2]float64{2, 1} || итог["ios"] != [2]float64{1, 0} {
+		t.Fatalf("за окно и сегодня: %v", итог)
+	}
+}

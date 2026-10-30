@@ -273,7 +273,8 @@ a{color:inherit}
 .ver i{height:5px;border-radius:1.5px}
 .ver i.e{background:var(--cell)}
 .age-l{text-align:center;margin-top:8px}
-.age-l span{display:block;font:400 12px var(--mono);color:var(--ink-3)}
+.age-l span{display:block;font:400 12px var(--mono);color:var(--ink-3);white-space:nowrap}
+.age-l span.long{font-size:10px;letter-spacing:-.03em}
 .age-l b{display:block;font:500 13px var(--mono);margin-top:1px}
 /* строки списков */
 .lh{display:flex;justify-content:space-between;font-size:13px;color:var(--ink-2);padding:12px 18px 4px}

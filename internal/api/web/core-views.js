@@ -187,11 +187,11 @@ function viewOverview() {
             <div class="ds"><span class="k">Разница</span><b class="blue">${dec(hMax / (hMin || 1))} раза</b><span class="s">между пиком и провалом</span></div>
             <div class="ds" id="dial-now"></div>
           </div></div>` : '<p class="block-empty">Часов ещё нет: сводка по часам наберётся за первые сутки.</p>') +
-      card('versions', 'Сборки', 'Сборка последнего дня человека', `<span class="badge">${всеСборки.length} ${plural(всеСборки.length, 'сборка', 'сборки', 'сборок')}</span>`,
+      card('versions', 'Сборки', `Сборка последнего дня человека · ${периодСловами()}`, `<span class="badge">${всеСборки.length} ${plural(всеСборки.length, 'сборка', 'сборки', 'сборок')}</span>`,
         vs.length ? `<div class="pad"><div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:16px"><b class="num" style="font:400 26px var(--mono);letter-spacing:-.01em">${n(vSum)}</b><span class="num blue" style="font-size:13px">${esc(String(vs[0].v).split('+')[0])} уже у ${n(vs[0].u)}</span></div>
-        <div class="ages" style="--n:${vs.length}">${vs.map((v, i) => { const f = Math.max(1, Math.round(v.u / vMax * 10)); return `<div><div class="ver" title="${esc(v.v)}: ${n(v.u)}">${Array.from({ length: 10 }, (_, k) => `<i class="${10 - k <= f ? tones[i] : 'e'}"></i>`).join('')}</div><div class="age-l"><span>${esc(String(v.v).split('+')[0])}</span><b>${short(v.u)}</b></div></div>`; }).join('')}</div></div>
-        <div class="hr"><div class="lh"><span>Платформы</span><span>Доля</span></div>
-        ${plat.map((p, i) => `<div class="li">${pie(p.u / pSum, i ? 't3' : 't1')}<div class="nm"><b>${p.p === 'ios' ? 'iOS' : p.p === 'android' ? 'Android' : esc(p.p)}</b><small>${n(p.u)} человек</small></div><div class="r"><b>${Math.round(p.u / pSum * 100)} %</b></div></div>`).join('')}</div>`
+        <div class="ages" style="--n:${vs.length}">${vs.map((v, i) => { const f = Math.max(1, Math.round(v.u / vMax * 10)); return `<div><div class="ver" title="${esc(v.v)}: ${n(v.u)}">${Array.from({ length: 10 }, (_, k) => `<i class="${10 - k <= f ? tones[i] : 'e'}"></i>`).join('')}</div><div class="age-l"><span${подписьСборки(v.v, vs).length > 7 ? ' class="long"' : ''}>${esc(подписьСборки(v.v, vs))}</span><b>${short(v.u)}</b></div></div>`; }).join('')}</div></div>
+        <div class="hr"><div class="lh"><span>Платформы · ${периодСловами()}</span><span>Доля</span></div>
+        ${plat.map((p, i) => `<div class="li">${pie(p.u / pSum, i ? 't3' : 't1')}<div class="nm"><b>${p.p === 'ios' ? 'iOS' : p.p === 'android' ? 'Android' : esc(p.p)}</b><small>${n(p.u)} человек${p.d !== undefined ? ` · ${n(p.d)} сегодня` : ''}</small></div><div class="r"><b>${Math.round(p.u / pSum * 100)} %</b></div></div>`).join('')}</div>`
         : '<p class="block-empty">Сборок не видно: приложение не присылает версию.</p>') +
     `</div><div class="grid g-57">` +
       card('screens', 'Куда уходит время', `${scr.length} ${plural(scr.length, 'экран', 'экрана', 'экранов')} · площадь плитки — доля на экране телефона`,
@@ -211,6 +211,15 @@ function viewOverview() {
     actV = b.dataset.av; document.querySelectorAll('[data-av]').forEach(x => x.setAttribute('aria-pressed', x === b));
     const box = document.getElementById('act-body'); morph(box, actions); drawAct(box); segThumbs();
   }));
+}
+
+/* Подпись сборки под колонкой: «1.40.0». Если у одной версии две сборки
+   (1.37.0+250 и 1.37.0+249), без номера сборки колонки неотличимы — тогда
+   «1.37+250». */
+function подписьСборки(v, все) {
+  const [осн, сб] = String(v).split('+');
+  const двойник = все.filter(x => String(x.v).split('+')[0] === осн).length > 1;
+  return двойник && сб ? осн.split('.').slice(0, 2).join('.') + '+' + сб : осн;
 }
 
 function peopleDays() {

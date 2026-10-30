@@ -389,9 +389,10 @@ func (a *API) срезВерсий(sql string, аргументы ...any) ([]map
 
 func (a *API) платформы(app, from, to string) (any, error) {
 	rows, err := a.s.Чтение().Query(`
-		SELECT coalesce(nullif(platform,''),'неизвестно'), count(DISTINCT who)
+		SELECT coalesce(nullif(platform,''),'неизвестно'), count(DISTINCT who),
+		       count(DISTINCT CASE WHEN day = ? THEN who END)
 		FROM seen WHERE app=? AND day BETWEEN ? AND ? GROUP BY 1 ORDER BY 2 DESC`,
-		app, from, to)
+		time.Now().UTC().Format("2006-01-02"), app, from, to)
 	if err != nil {
 		return nil, err
 	}
@@ -400,11 +401,13 @@ func (a *API) платформы(app, from, to string) (any, error) {
 	out := []map[string]any{}
 	for rows.Next() {
 		var имя string
-		var людей float64
-		if err := rows.Scan(&имя, &людей); err != nil {
+		var людей, сегодня float64
+		if err := rows.Scan(&имя, &людей, &сегодня); err != nil {
 			return nil, err
 		}
-		out = append(out, map[string]any{"p": имя, "u": людей})
+		// u — люди за окно, d — за сегодня: окно в две недели двигается
+		// медленно, а сегодняшний день показывает, что происходит сейчас.
+		out = append(out, map[string]any{"p": имя, "u": людей, "d": сегодня})
 	}
 	return out, rows.Err()
 }
