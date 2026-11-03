@@ -225,7 +225,7 @@ a{color:inherit}
 .br-x span{position:absolute;top:9px;white-space:nowrap;transform:translateX(-50%)}
 .br-x span.d{color:var(--blue-ink);background:var(--blue-soft);padding:1px 7px;border-radius:5px;top:7px;z-index:1}
 /* вкладки величин под графиком */
-.mtabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));border-top:1px solid var(--line);margin-top:6px}
+.mtabs{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);border-top:1px solid var(--line);margin-top:6px}
 .mtab{text-align:left;padding:13px 18px 15px;border-left:1px solid var(--line);position:relative;transition:background-color .28s var(--ease)}
 .mtab:first-child{border-left:0;border-bottom-left-radius:11px}
 .mtab:last-child{border-bottom-right-radius:11px}
@@ -817,7 +817,7 @@ a{color:inherit}
   .grid.g-75,.grid.g-57{grid-template-columns:minmax(0,1fr)}
   .g12>.card{grid-column:span 12!important}
   #scr-grid{grid-template-columns:minmax(0,1fr)!important}
-  .mtabs{grid-template-columns:repeat(2,minmax(0,1fr))} .mtab:nth-child(3){border-left:0} .mtab:nth-child(n+3){border-top:1px solid var(--line)} .mtab:first-child,.mtab:last-child{border-radius:0}
+  .mtabs{grid-auto-flow:row;grid-template-columns:repeat(2,minmax(0,1fr))} .mtab:nth-child(odd){border-left:0} .mtab:nth-child(n+3){border-top:1px solid var(--line)} .mtab:first-child,.mtab:last-child{border-radius:0} .mtab:last-child:nth-child(odd){grid-column:span 2}
   .shelf{--cols-auto:6}
 }
 @media (max-width:820px){

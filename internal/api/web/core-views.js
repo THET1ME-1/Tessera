@@ -320,13 +320,21 @@ function peopleDays() {
   const stats = [
     { k: 'Новые', icon: 'spark', now: list.reduce((s, x) => s + x.nw, 0), was: before.length && before.reduce((s, x) => s + x.nw, 0) },
     { k: 'Вернувшихся в день', icon: 'refresh', now: avgOf(полных(list), x => x.ret), was: before.length && avgOf(полных(before), x => x.ret) }];
-  document.getElementById('pd-tabs').innerHTML = онлайнЯчейка() + stats.map(m => { const d = m.was ? (m.now / m.was - 1) * 100 : null; return `<div class="mtab"><span class="k"><span class="ti">${svg(m.icon)}</span>${m.k}</span><b class="v">${n(m.now)}</b>
+  document.getElementById('pd-tabs').innerHTML = аккаунтыЯчейка() + онлайнЯчейка() + stats.map(m => { const d = m.was ? (m.now / m.was - 1) * 100 : null; return `<div class="mtab"><span class="k"><span class="ti">${svg(m.icon)}</span>${m.k}</span><b class="v">${n(m.now)}</b>
       <span class="s">${d === null ? 'раньше данных нет' : `<b class="${d < 0 ? 'dn' : ''}">${pctd(d)}</b> к прошлым ${cols} дн.`}</span></div>`; }).join('') +
     `<div class="mtab"><span class="k"><span class="ti">${svg('clock')}</span>Самые людные часы</span><b class="v">${peak.v ? SLOT(peak.k).replace(/:00/g, '') : '—'}</b><span class="s">${peak.v ? `≈ ${n(peak.v)} человек в час · ${tzName(tz)}` : 'часов ещё нет'}</span></div>`;
   document.getElementById('pd-range').textContent = `${day(list[0].d)} – ${day(list.at(-1).d)} · столбик = сутки, квадратик = 3 часа · время: ${tzName(tz)}`;
   живойОнлайн();
   синхронизироватьОкно();
 }
+/* Всего аккаунтов: число объявляет модуль приложения (provides.people_total).
+   Период окна на него не влияет. Нет модуля — нет и ячейки. */
+function аккаунтыЯчейка() {
+  const всего = (DATA.totals || {}).accounts;
+  if (!всего) return '';
+  return `<div class="mtab"><span class="k"><span class="ti">${svg('people')}</span>Всего аккаунтов</span><b class="v">${n(всего)}</b><span class="s">зарегистрировано</span></div>`;
+}
+
 /* Сейчас в приложении: живое число модуля с разбивкой по системам. У
    приложения без такого модуля — люди за сегодня из сводки ядра. */
 let онлайнЧисло = null;
